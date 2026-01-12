@@ -1,0 +1,38 @@
+{
+  "name": "online-clipboard",
+  "version": "1.0.0",
+  "description": "Real-time clipboard sharing application with Next.js 15 and Turso",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@libsql/client": "^0.14.0",
+    "@tailwindcss/typography": "^0.5.19",
+    "next": "15.2.8",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-markdown": "^10.1.0",
+    "react-syntax-highlighter": "^15.5.0",
+    "react-window": "^1.8.10",
+    "remark-gfm": "^4.0.1",
+    "swr": "^2.2.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.15",
+    "@types/node": "^22",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/react-syntax-highlighter": "^15.5.13",
+    "@types/react-window": "^1.8.8",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.17.0"
+  }
+}
