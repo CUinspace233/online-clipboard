@@ -2,17 +2,25 @@
 
 import { useState, useCallback } from 'react';
 import useSWR from 'swr';
-import { ArrowRightOnRectangleIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowRightOnRectangleIcon,
+  ClipboardDocumentIcon,
+  ArrowsRightLeftIcon,
+} from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ClipboardStats } from '@/components/clipboard/ClipboardStats';
 import { ClipboardInput } from '@/components/clipboard/ClipboardInput';
 import { ClipboardList } from '@/components/clipboard/ClipboardList';
+import { FileTransferPanel } from '@/components/transfer/FileTransferPanel';
 import type { ClipboardItem } from '@/types/clipboard';
+
+type Tab = 'clipboard' | 'transfer';
 
 export default function Home() {
   const { user, token, isLoading: authLoading, login, register, logout, isAuthenticated } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>('clipboard');
 
   const fetcher = useCallback(
     async (url: string) => {
@@ -165,38 +173,68 @@ export default function Home() {
             </button>
           </div>
         </div>
+        <div className="max-w-4xl mx-auto px-4">
+          <nav className="flex gap-1">
+            <button
+              onClick={() => setActiveTab('clipboard')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                activeTab === 'clipboard'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <ClipboardDocumentIcon className="w-4 h-4" />
+              Clipboard
+            </button>
+            <button
+              onClick={() => setActiveTab('transfer')}
+              className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
+                activeTab === 'transfer'
+                  ? 'border-blue-600 text-blue-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <ArrowsRightLeftIcon className="w-4 h-4" />
+              File Transfer
+            </button>
+          </nav>
+        </div>
       </header>
 
       <main className="max-w-4xl mx-auto px-4 py-8">
-        {isLoading ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center">
-              <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-              <p className="text-gray-600">Loading clipboard items...</p>
+        {activeTab === 'clipboard' ? (
+          isLoading ? (
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center">
+                <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
+                <p className="text-gray-600">Loading clipboard items...</p>
+              </div>
             </div>
-          </div>
-        ) : error ? (
-          <div className="flex items-center justify-center min-h-[60vh]">
-            <div className="text-center max-w-md">
-              <h2 className="text-xl font-bold text-red-600 mb-2">Connection Error</h2>
-              <p className="text-gray-600 mb-4">
-                Failed to connect to the clipboard service. Please check your internet connection
-                and try again.
-              </p>
-              <button
-                onClick={() => mutate()}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
-              >
-                Retry
-              </button>
+          ) : error ? (
+            <div className="flex items-center justify-center min-h-[60vh]">
+              <div className="text-center max-w-md">
+                <h2 className="text-xl font-bold text-red-600 mb-2">Connection Error</h2>
+                <p className="text-gray-600 mb-4">
+                  Failed to connect to the clipboard service. Please check your internet connection
+                  and try again.
+                </p>
+                <button
+                  onClick={() => mutate()}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors cursor-pointer"
+                >
+                  Retry
+                </button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-6">
+              <ClipboardStats totalItems={items?.length || 0} isConnected={isConnected} />
+              <ClipboardInput onCreate={handleCreate} isLoading={isCreating} />
+              <ClipboardList items={items || []} onDelete={handleDelete} />
+            </div>
+          )
         ) : (
-          <div className="space-y-6">
-            <ClipboardStats totalItems={items?.length || 0} isConnected={isConnected} />
-            <ClipboardInput onCreate={handleCreate} isLoading={isCreating} />
-            <ClipboardList items={items || []} onDelete={handleDelete} />
-          </div>
+          <FileTransferPanel />
         )}
       </main>
     </div>
