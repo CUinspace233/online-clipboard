@@ -83,6 +83,20 @@ export function FileTransferPanel() {
 
   return (
     <div className="space-y-4">
+      {/* Hidden file input — kept outside conditionals so it's never unmounted while the file picker is open */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files && e.target.files.length > 0) {
+            addFiles(e.target.files);
+          }
+          e.target.value = '';
+        }}
+      />
+
       {/* Incoming request modal */}
       {incomingRequest && (
         <TransferRequest
@@ -166,16 +180,6 @@ export function FileTransferPanel() {
               Drop files here or <span className="text-blue-600 font-medium">browse</span>
             </p>
             <p className="text-xs text-gray-400 mt-1">Max 300MB total</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files) addFiles(e.target.files);
-                e.target.value = '';
-              }}
-            />
           </div>
 
           {/* Selected files list */}
