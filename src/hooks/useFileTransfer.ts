@@ -34,6 +34,7 @@ export function useFileTransfer() {
   const peerRef = useRef<PeerConnection | null>(null);
   const filesToSendRef = useRef<File[]>([]);
   const receiverRef = useRef<FileReceiver | null>(null);
+  const pendingIceCandidatesRef = useRef<string[]>([]);
   const onlineDevicesRef = useRef(onlineDevices);
   onlineDevicesRef.current = onlineDevices;
 
@@ -150,6 +151,16 @@ export function useFileTransfer() {
           }
           try {
             await peerRef.current.handleOffer(msg.payload);
+            // Flush any ICE candidates that arrived before the offer
+            const pending = pendingIceCandidatesRef.current;
+            pendingIceCandidatesRef.current = [];
+            for (const c of pending) {
+              try {
+                await peerRef.current.addIceCandidate(c);
+              } catch {
+                console.warn('Failed to add buffered ICE candidate');
+              }
+            }
           } catch (e) {
             console.error('Failed to handle offer:', e);
             setState('error');
@@ -165,6 +176,16 @@ export function useFileTransfer() {
           }
           try {
             await peerRef.current.handleAnswer(msg.payload);
+            // Flush any ICE candidates that arrived before the answer
+            const pending = pendingIceCandidatesRef.current;
+            pendingIceCandidatesRef.current = [];
+            for (const c of pending) {
+              try {
+                await peerRef.current.addIceCandidate(c);
+              } catch {
+                console.warn('Failed to add buffered ICE candidate');
+              }
+            }
           } catch (e) {
             console.error('Failed to handle answer:', e);
             setState('error');
@@ -175,7 +196,9 @@ export function useFileTransfer() {
 
         case 'ice-candidate': {
           if (!peerRef.current) {
-            console.warn('Received ICE candidate but no peer connection exists');
+            // Buffer candidates that arrive before the peer is created
+            console.log('[Signal] Buffering ICE candidate (peer not ready)');
+            pendingIceCandidatesRef.current.push(msg.payload);
             return;
           }
           try {
@@ -247,6 +270,7 @@ export function useFileTransfer() {
     peerRef.current?.close();
     peerRef.current = null;
     receiverRef.current = null;
+    pendingIceCandidatesRef.current = [];
     setState('idle');
     setProgress(null);
     setError('');
@@ -257,6 +281,7 @@ export function useFileTransfer() {
     peerRef.current?.close();
     peerRef.current = null;
     receiverRef.current = null;
+    pendingIceCandidatesRef.current = [];
     setState('idle');
     setProgress(null);
     setError('');

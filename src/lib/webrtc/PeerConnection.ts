@@ -22,6 +22,8 @@ export class PeerConnection {
   private sendSignal: SignalSender;
   private options: PeerConnectionOptions;
   private closed = false;
+  private pendingCandidates: RTCIceCandidateInit[] = [];
+  private remoteDescriptionSet = false;
 
   constructor(options: PeerConnectionOptions) {
     this.options = options;
@@ -32,18 +34,31 @@ export class PeerConnection {
     this.pc.onicecandidate = (event) => {
       if (event.candidate && !this.closed) {
         this.sendSignal('ice-candidate', JSON.stringify(event.candidate)).catch((err) =>
-          console.error('Failed to send ICE candidate:', err)
+          console.error('[WebRTC] Failed to send ICE candidate:', err)
         );
       }
     };
 
     this.pc.ondatachannel = (event) => {
+      console.log('[WebRTC] Remote data channel received');
       this.setupDataChannel(event.channel);
     };
 
+    this.pc.oniceconnectionstatechange = () => {
+      console.log('[WebRTC] ICE connection state:', this.pc.iceConnectionState);
+      if (this.pc.iceConnectionState === 'failed') {
+        this.options.onError?.(
+          new Error('Connection failed — unable to establish direct connection')
+        );
+      }
+    };
+
     this.pc.onconnectionstatechange = () => {
-      if (this.pc.connectionState === 'failed' || this.pc.connectionState === 'disconnected') {
-        this.options.onError?.(new Error(`Connection ${this.pc.connectionState}`));
+      console.log('[WebRTC] Connection state:', this.pc.connectionState);
+      if (this.pc.connectionState === 'failed') {
+        this.options.onError?.(
+          new Error('Connection failed — unable to establish direct connection')
+        );
       }
     };
   }
@@ -53,10 +68,12 @@ export class PeerConnection {
     channel.binaryType = 'arraybuffer';
 
     channel.onopen = () => {
+      console.log('[WebRTC] DataChannel open');
       this.options.onDataChannelOpen?.();
     };
 
     channel.onclose = () => {
+      console.log('[WebRTC] DataChannel closed');
       this.options.onDataChannelClose?.();
     };
 
@@ -65,8 +82,21 @@ export class PeerConnection {
     };
 
     channel.onerror = (event) => {
-      this.options.onError?.(new Error(`DataChannel error: ${event}`));
+      console.error('[WebRTC] DataChannel error:', event);
+      this.options.onError?.(new Error('DataChannel error'));
     };
+  }
+
+  private async flushPendingCandidates(): Promise<void> {
+    const candidates = this.pendingCandidates;
+    this.pendingCandidates = [];
+    for (const candidate of candidates) {
+      try {
+        await this.pc.addIceCandidate(candidate);
+      } catch (e) {
+        console.warn('[WebRTC] Failed to add buffered ICE candidate:', e);
+      }
+    }
   }
 
   async createOffer(): Promise<void> {
@@ -77,25 +107,38 @@ export class PeerConnection {
 
     const offer = await this.pc.createOffer();
     await this.pc.setLocalDescription(offer);
+    console.log('[WebRTC] Offer created and set as local description');
     await this.sendSignal('offer', JSON.stringify(offer));
   }
 
   async handleOffer(offerSdp: string): Promise<void> {
     const offer = JSON.parse(offerSdp) as RTCSessionDescriptionInit;
     await this.pc.setRemoteDescription(offer);
+    this.remoteDescriptionSet = true;
+    console.log('[WebRTC] Remote offer set, flushing pending candidates');
+    await this.flushPendingCandidates();
 
     const answer = await this.pc.createAnswer();
     await this.pc.setLocalDescription(answer);
+    console.log('[WebRTC] Answer created and set as local description');
     await this.sendSignal('answer', JSON.stringify(answer));
   }
 
   async handleAnswer(answerSdp: string): Promise<void> {
     const answer = JSON.parse(answerSdp) as RTCSessionDescriptionInit;
     await this.pc.setRemoteDescription(answer);
+    this.remoteDescriptionSet = true;
+    console.log('[WebRTC] Remote answer set, flushing pending candidates');
+    await this.flushPendingCandidates();
   }
 
   async addIceCandidate(candidateJson: string): Promise<void> {
     const candidate = JSON.parse(candidateJson) as RTCIceCandidateInit;
+    if (!this.remoteDescriptionSet) {
+      console.log('[WebRTC] Buffering ICE candidate (remote description not set yet)');
+      this.pendingCandidates.push(candidate);
+      return;
+    }
     await this.pc.addIceCandidate(candidate);
   }
 
