@@ -56,6 +56,16 @@ export function FileTransferPanel() {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  const handleFileInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files && e.target.files.length > 0) {
+        addFiles(e.target.files);
+      }
+      e.target.value = '';
+    },
+    [addFiles]
+  );
+
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
       e.preventDefault();
@@ -89,12 +99,7 @@ export function FileTransferPanel() {
         type="file"
         multiple
         className="hidden"
-        onChange={(e) => {
-          if (e.target.files && e.target.files.length > 0) {
-            addFiles(e.target.files);
-          }
-          e.target.value = '';
-        }}
+        onChange={handleFileInputChange}
       />
 
       {/* Incoming request modal */}

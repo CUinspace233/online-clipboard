@@ -59,8 +59,14 @@ export function useDevicePresence() {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
-        const devices = await res.json();
-        setOnlineDevices(devices);
+        const devices: DevicePresence[] = await res.json();
+        // Only update state if the device list actually changed, to avoid
+        // unnecessary re-renders that can interrupt the file picker dialog
+        setOnlineDevices((prev) => {
+          const prevIds = prev.map((d) => d.device_id).sort().join(',');
+          const newIds = devices.map((d) => d.device_id).sort().join(',');
+          return prevIds === newIds ? prev : devices;
+        });
       }
     } catch {
       // silent
