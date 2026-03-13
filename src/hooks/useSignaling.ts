@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import type { SignalingMessage } from '@/types/transfer';
 
@@ -12,15 +12,17 @@ interface UseSignalingOptions {
 
 export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSignalingOptions) {
   const { token } = useAuth();
-  const [lastId, setLastId] = useState(0);
-  const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const lastIdRef = useRef(0);
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
+  const pollingRef = useRef(false);
 
   const pollMessages = useCallback(async () => {
-    if (!token || !deviceId) return;
+    if (!token || !deviceId || pollingRef.current) return;
+    pollingRef.current = true;
     try {
-      const url = `/api/transfer/signal?device_id=${deviceId}${lastId ? `&after=${lastId}` : ''}`;
+      const afterParam = lastIdRef.current ? `&after=${lastIdRef.current}` : '';
+      const url = `/api/transfer/signal?device_id=${deviceId}${afterParam}`;
       const res = await fetch(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -29,13 +31,10 @@ export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSi
       const messages: SignalingMessage[] = await res.json();
       if (messages.length === 0) return;
 
-      // Update lastId
       const maxId = Math.max(...messages.map((m) => m.id));
-      setLastId(maxId);
+      lastIdRef.current = maxId;
 
-      // Consume and process each message
       for (const msg of messages) {
-        // Consume in background
         fetch(`/api/transfer/signal/${msg.id}/consume`, {
           method: 'POST',
           headers: { Authorization: `Bearer ${token}` },
@@ -45,26 +44,27 @@ export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSi
       }
     } catch {
       // silent
+    } finally {
+      pollingRef.current = false;
     }
-  }, [token, deviceId, lastId]);
+  }, [token, deviceId]);
 
   useEffect(() => {
     if (!deviceId || !token) return;
 
+    // Poll immediately once
+    pollMessages();
+
     const interval = fastPolling ? 500 : 3000;
-    pollRef.current = setInterval(pollMessages, interval);
+    const id = setInterval(pollMessages, interval);
 
     return () => {
-      clearInterval(pollRef.current);
+      clearInterval(id);
     };
   }, [deviceId, token, fastPolling, pollMessages]);
 
   const sendSignal = useCallback(
-    async (
-      toDeviceId: string,
-      type: SignalingMessage['type'],
-      payload: string
-    ) => {
+    async (toDeviceId: string, type: SignalingMessage['type'], payload: string) => {
       if (!token) return;
       await fetch('/api/transfer/signal', {
         method: 'POST',
