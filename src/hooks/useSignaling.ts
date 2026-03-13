@@ -7,7 +7,7 @@ import type { SignalingMessage } from '@/types/transfer';
 interface UseSignalingOptions {
   deviceId: string;
   fastPolling?: boolean;
-  onMessage?: (message: SignalingMessage) => void;
+  onMessage?: (message: SignalingMessage) => void | Promise<void>;
 }
 
 export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSignalingOptions) {
@@ -16,6 +16,9 @@ export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSi
   const onMessageRef = useRef(onMessage);
   onMessageRef.current = onMessage;
   const pollingRef = useRef(false);
+  // Use ref so the polling loop picks up changes immediately without re-render
+  const fastPollingRef = useRef(fastPolling);
+  fastPollingRef.current = fastPolling;
 
   const pollMessages = useCallback(async () => {
     if (!token || !deviceId || pollingRef.current) return;
@@ -40,7 +43,9 @@ export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSi
           headers: { Authorization: `Bearer ${token}` },
         }).catch(console.error);
 
-        onMessageRef.current?.(msg);
+        // Must await — handlers are async (e.g. handleOffer/handleAnswer)
+        // and subsequent messages (ice-candidates) depend on prior ones completing
+        await onMessageRef.current?.(msg);
       }
     } catch {
       // silent
@@ -52,16 +57,27 @@ export function useSignaling({ deviceId, fastPolling = false, onMessage }: UseSi
   useEffect(() => {
     if (!deviceId || !token) return;
 
-    // Poll immediately once
-    pollMessages();
+    let stopped = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const interval = fastPolling ? 500 : 3000;
-    const id = setInterval(pollMessages, interval);
+    const loop = async () => {
+      if (stopped) return;
+      await pollMessages();
+      if (stopped) return;
+      const delay = fastPollingRef.current ? 500 : 3000;
+      timeoutId = setTimeout(loop, delay);
+    };
+
+    // Start immediately
+    loop();
 
     return () => {
-      clearInterval(id);
+      stopped = true;
+      clearTimeout(timeoutId);
     };
-  }, [deviceId, token, fastPolling, pollMessages]);
+    // Only restart loop when token/deviceId change, NOT on fastPolling change
+    // fastPolling is read via ref inside the loop
+  }, [deviceId, token, pollMessages]);
 
   const sendSignal = useCallback(
     async (toDeviceId: string, type: SignalingMessage['type'], payload: string) => {
