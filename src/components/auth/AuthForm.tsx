@@ -15,10 +15,28 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitPulse, setSubmitPulse] = useState(false);
+  const isRegister = mode === 'register';
+  const isBusy = isLoading || isSubmitting;
+  const submitLabel = isRegister ? 'Create Account' : 'Sign In';
+  const submittingLabel = isRegister ? 'Creating account...' : 'Signing in...';
+
+  const switchMode = (nextMode: 'login' | 'register') => {
+    if (nextMode === mode || isBusy) {
+      return;
+    }
+
+    setMode(nextMode);
+    setError('');
+    setConfirmPassword('');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSubmitPulse(true);
+    window.setTimeout(() => setSubmitPulse(false), 360);
 
     // Validation
     if (!username.trim() || !password.trim()) {
@@ -26,7 +44,7 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
       return;
     }
 
-    if (mode === 'register') {
+    if (isRegister) {
       if (username.length < 3) {
         setError('Username must be at least 3 characters');
         return;
@@ -48,14 +66,21 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
       }
     }
 
+    setIsSubmitting(true);
+
     try {
-      if (mode === 'login') {
-        await onLogin(username, password);
-      } else {
-        await onRegister(username, password);
-      }
+      const authRequest =
+        mode === 'login' ? onLogin(username, password) : onRegister(username, password);
+
+      await Promise.all([
+        authRequest,
+        new Promise(resolve => {
+          window.setTimeout(resolve, 520);
+        }),
+      ]);
     } catch (err: any) {
       setError(err.message || 'An error occurred');
+      setIsSubmitting(false);
     }
   };
 
@@ -64,39 +89,35 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
       <div className="max-w-md w-full">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Clipboard Sharing</h1>
-          <p className="text-gray-600">
-            {mode === 'login' ? 'Sign in to your account' : 'Create a new account'}
+          <p key={mode} className="text-gray-600 auth-mode-copy">
+            {isRegister ? 'Create a new account' : 'Sign in to your account'}
           </p>
         </div>
 
         <div className="bg-white rounded-lg shadow-md border border-gray-200 p-8">
-          <div className="flex gap-2 mb-6">
+          <div className="relative grid grid-cols-2 gap-2 mb-6 rounded-lg bg-gray-100 p-1">
+            <span
+              className={`absolute inset-y-1 left-1 w-[calc(50%-0.25rem)] rounded-md bg-blue-600 shadow-sm transition-transform duration-300 ease-out ${
+                isRegister ? 'translate-x-[calc(100%+0.5rem)]' : 'translate-x-0'
+              }`}
+              aria-hidden="true"
+            />
             <button
               type="button"
-              onClick={() => {
-                setMode('login');
-                setError('');
-                setConfirmPassword('');
-              }}
-              className={`flex-1 py-2 rounded-lg font-medium transition-colors cursor-pointer ${
-                mode === 'login'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              onClick={() => switchMode('login')}
+              disabled={isBusy}
+              className={`relative z-10 py-2 rounded-md font-medium transition-colors duration-300 cursor-pointer active:scale-[0.98] ${
+                mode === 'login' ? 'text-white' : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               Login
             </button>
             <button
               type="button"
-              onClick={() => {
-                setMode('register');
-                setError('');
-                setConfirmPassword('');
-              }}
-              className={`flex-1 py-2 rounded-lg font-medium transition-colors cursor-pointer ${
-                mode === 'register'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              onClick={() => switchMode('register')}
+              disabled={isBusy}
+              className={`relative z-10 py-2 rounded-md font-medium transition-colors duration-300 cursor-pointer active:scale-[0.98] ${
+                isRegister ? 'text-white' : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               Register
@@ -104,12 +125,12 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm auth-error">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form key={mode} onSubmit={handleSubmit} className="space-y-4 auth-form-panel">
             <div>
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
                 Username
@@ -125,7 +146,7 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
                   onChange={e => setUsername(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter your username"
-                  disabled={isLoading}
+                  disabled={isBusy}
                   autoComplete="username"
                 />
               </div>
@@ -146,14 +167,14 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
                   onChange={e => setPassword(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   placeholder="Enter your password"
-                  disabled={isLoading}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                  disabled={isBusy}
+                  autoComplete={isRegister ? 'new-password' : 'current-password'}
                 />
               </div>
             </div>
 
-            {mode === 'register' && (
-              <div>
+            {isRegister && (
+              <div className="auth-register-field">
                 <label
                   htmlFor="confirmPassword"
                   className="block text-sm font-medium text-gray-700 mb-2"
@@ -171,7 +192,7 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
                     onChange={e => setConfirmPassword(e.target.value)}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     placeholder="Confirm your password"
-                    disabled={isLoading}
+                    disabled={isBusy}
                     autoComplete="new-password"
                   />
                 </div>
@@ -180,15 +201,25 @@ export function AuthForm({ onLogin, onRegister, isLoading }: AuthFormProps) {
 
             <button
               type="submit"
-              disabled={isLoading}
-              className="w-full py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors cursor-pointer"
+              disabled={isBusy}
+              className={`relative flex w-full items-center justify-center overflow-hidden py-2 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-blue-500 disabled:cursor-wait transition-all duration-200 cursor-pointer active:scale-[0.99] ${
+                submitPulse ? 'auth-submit-pulse' : ''
+              } ${isBusy ? 'auth-submit-loading' : ''}`}
             >
-              {isLoading ? 'Please wait...' : mode === 'login' ? 'Sign In' : 'Create Account'}
+              <span className={`transition-transform duration-200 ${isBusy ? 'translate-x-2' : ''}`}>
+                {isBusy ? submittingLabel : submitLabel}
+              </span>
+              {isBusy && (
+                <span
+                  className="absolute left-4 h-4 w-4 rounded-full border-2 border-white/60 border-t-white animate-spin"
+                  aria-hidden="true"
+                />
+              )}
             </button>
           </form>
 
-          {mode === 'register' && (
-            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          {isRegister && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg auth-register-field">
               <p className="text-xs text-blue-800">
                 <strong>Requirements:</strong>
                 <br />• Username: 3-50 characters (letters, numbers, underscores only)
