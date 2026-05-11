@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
@@ -14,12 +14,34 @@ interface ClipboardItemProps {
   onDelete: (id: number) => void;
 }
 
+const previewLength = 500;
+
+function formatJsonForDisplay(content: string) {
+  const trimmedContent = content.trim();
+
+  if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
+    return null;
+  }
+
+  try {
+    return JSON.stringify(JSON.parse(trimmedContent), null, 2);
+  } catch {
+    return null;
+  }
+}
+
 export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isJsonFormatted, setIsJsonFormatted] = useState(false);
   const { copied, copyToClipboard } = useClipboard();
 
-  const isLongContent = item.content.length > 500;
-  const displayContent = isExpanded ? item.content : item.content.slice(0, 500);
+  const formattedJson = useMemo(() => formatJsonForDisplay(item.content), [item.content]);
+  const hasJsonFormat = formattedJson !== null;
+  const shouldRenderFormattedJson = isJsonFormatted && hasJsonFormat;
+  const contentForDisplay =
+    shouldRenderFormattedJson && formattedJson !== null ? formattedJson : item.content;
+  const isLongContent = contentForDisplay.length > previewLength;
+  const displayContent = isExpanded ? contentForDisplay : contentForDisplay.slice(0, previewLength);
 
   const handleCopy = () => {
     copyToClipboard(item.content);
@@ -55,11 +77,23 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
                 {item.language}
               </span>
             )}
-            <span className="text-xs text-gray-500">
-              {formatTimestamp(item.created_at)}
-            </span>
+            {item.content_type === 'text/plain' && hasJsonFormat && (
+              <span className="px-2 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded">
+                JSON
+              </span>
+            )}
+            <span className="text-xs text-gray-500">{formatTimestamp(item.created_at)}</span>
           </div>
           <div className="flex items-center gap-2">
+            {hasJsonFormat && (
+              <button
+                onClick={() => setIsJsonFormatted(current => !current)}
+                className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                title={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}
+              >
+                {isJsonFormatted ? 'Raw' : 'Beautify'}
+              </button>
+            )}
             <button
               onClick={handleCopy}
               className="p-2 text-gray-600 hover:text-blue-600 transition-colors cursor-pointer"
@@ -82,12 +116,30 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
         </div>
 
         <div className="relative">
-          {item.content_type === 'text/code' && item.language ? (
+          {shouldRenderFormattedJson ? (
+            <div className="rounded overflow-hidden">
+              <SyntaxHighlighter
+                language="json"
+                style={vs}
+                customStyle={{
+                  margin: 0,
+                  padding: '1rem',
+                  fontSize: '0.875rem',
+                  maxHeight: isExpanded ? 'none' : '400px',
+                  overflow: 'auto',
+                }}
+                showLineNumbers
+              >
+                {displayContent}
+              </SyntaxHighlighter>
+            </div>
+          ) : item.content_type === 'text/code' && item.language ? (
             item.language === 'markdown' ? (
-              <div className="prose prose-sm prose-slate max-w-none bg-white p-4 rounded border border-gray-200 overflow-auto prose-ul:list-disc prose-ol:list-decimal prose-li:ml-4" style={{ maxHeight: isExpanded ? 'none' : '400px' }}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {displayContent}
-                </ReactMarkdown>
+              <div
+                className="prose prose-sm prose-slate max-w-none bg-white p-4 rounded border border-gray-200 overflow-auto prose-ul:list-disc prose-ol:list-decimal prose-li:ml-4"
+                style={{ maxHeight: isExpanded ? 'none' : '400px' }}
+              >
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
               </div>
             ) : (
               <div className="rounded overflow-hidden">
@@ -114,7 +166,7 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
           )}
 
           {isLongContent && !isExpanded && (
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-white to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-16 bg-linear-to-t from-white to-transparent" />
           )}
         </div>
 
