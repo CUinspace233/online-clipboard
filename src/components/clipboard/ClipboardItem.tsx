@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { vs } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { ClipboardDocumentIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline';
@@ -15,6 +15,20 @@ interface ClipboardItemProps {
 }
 
 const previewLength = 500;
+const syntaxHighlighterCustomStyle = {
+  margin: 0,
+  padding: '1rem',
+  fontSize: '0.875rem',
+  lineHeight: '1.6',
+  background: '#f8fafc',
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
+} as const;
+const syntaxLineNumberStyle = {
+  color: '#94a3b8',
+  fontStyle: 'normal',
+  minWidth: '2.75em',
+} as const;
 
 function formatJsonForDisplay(content: string) {
   const trimmedContent = content.trim();
@@ -120,14 +134,13 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
             <div className="rounded overflow-hidden">
               <SyntaxHighlighter
                 language="json"
-                style={vs}
+                style={oneLight}
                 customStyle={{
-                  margin: 0,
-                  padding: '1rem',
-                  fontSize: '0.875rem',
+                  ...syntaxHighlighterCustomStyle,
                   maxHeight: isExpanded ? 'none' : '400px',
                   overflow: 'auto',
                 }}
+                lineNumberStyle={syntaxLineNumberStyle}
                 showLineNumbers
               >
                 {displayContent}
@@ -145,14 +158,13 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
               <div className="rounded overflow-hidden">
                 <SyntaxHighlighter
                   language={item.language}
-                  style={vs}
+                  style={oneLight}
                   customStyle={{
-                    margin: 0,
-                    padding: '1rem',
-                    fontSize: '0.875rem',
+                    ...syntaxHighlighterCustomStyle,
                     maxHeight: isExpanded ? 'none' : '400px',
                     overflow: 'auto',
                   }}
+                  lineNumberStyle={syntaxLineNumberStyle}
                   showLineNumbers
                 >
                   {displayContent}
