@@ -1,11 +1,17 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ClipboardDocumentIcon, TrashIcon, CheckIcon } from '@heroicons/react/24/outline';
+import {
+  ArrowsPointingOutIcon,
+  CheckIcon,
+  ClipboardDocumentIcon,
+  TrashIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
 import { useClipboard } from '@/hooks/useClipboard';
 import type { ClipboardItem as ClipboardItemType } from '@/types/clipboard';
 
@@ -46,6 +52,7 @@ function formatJsonForDisplay(content: string) {
 
 export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isImmersiveOpen, setIsImmersiveOpen] = useState(false);
   const [isJsonFormatted, setIsJsonFormatted] = useState(false);
   const { copied, copyToClipboard } = useClipboard();
 
@@ -57,12 +64,32 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
   const isLongContent = contentForDisplay.length > previewLength;
   const displayContent = isExpanded ? contentForDisplay : contentForDisplay.slice(0, previewLength);
 
+  useEffect(() => {
+    if (!isImmersiveOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsImmersiveOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = originalOverflow;
+    };
+  }, [isImmersiveOpen]);
+
   const handleCopy = () => {
     copyToClipboard(item.content);
   };
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this item?')) {
+      setIsImmersiveOpen(false);
       onDelete(item.id);
     }
   };
@@ -81,116 +108,216 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
     return `${days} day${days !== 1 ? 's' : ''} ago`;
   };
 
-  return (
-    <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden transition-all hover:shadow-lg">
-      <div className="p-4">
-        <div className="flex items-start justify-between mb-3">
-          <div className="flex items-center gap-2">
-            {item.content_type === 'text/code' && item.language && (
-              <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">
-                {item.language}
-              </span>
-            )}
-            {item.content_type === 'text/plain' && hasJsonFormat && (
-              <span className="px-2 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded">
-                JSON
-              </span>
-            )}
-            <span className="text-xs text-gray-500">{formatTimestamp(item.created_at)}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {hasJsonFormat && (
-              <button
-                onClick={() => setIsJsonFormatted(current => !current)}
-                className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
-                title={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}
-              >
-                {isJsonFormatted ? 'Raw' : 'Beautify'}
-              </button>
-            )}
-            <button
-              onClick={handleCopy}
-              className="p-2 text-gray-600 hover:text-blue-600 transition-colors cursor-pointer"
-              title="Copy to clipboard"
-            >
-              {copied ? (
-                <CheckIcon className="w-5 h-5 text-green-600" />
-              ) : (
-                <ClipboardDocumentIcon className="w-5 h-5" />
-              )}
-            </button>
-            <button
-              onClick={handleDelete}
-              className="p-2 text-gray-600 hover:text-red-600 transition-colors cursor-pointer"
-              title="Delete"
-            >
-              <TrashIcon className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
+  const renderBadges = () => (
+    <>
+      {item.content_type === 'text/code' && item.language && (
+        <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">
+          {item.language}
+        </span>
+      )}
+      {item.content_type === 'text/plain' && hasJsonFormat && (
+        <span className="px-2 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded">
+          JSON
+        </span>
+      )}
+      <span className="text-xs text-gray-500">{formatTimestamp(item.created_at)}</span>
+    </>
+  );
 
-        <div className="relative">
-          {shouldRenderFormattedJson ? (
-            <div className="rounded overflow-hidden">
-              <SyntaxHighlighter
-                language="json"
-                style={oneLight}
-                customStyle={{
-                  ...syntaxHighlighterCustomStyle,
-                  maxHeight: isExpanded ? 'none' : '400px',
-                  overflow: 'auto',
-                }}
-                lineNumberStyle={syntaxLineNumberStyle}
-                showLineNumbers
-              >
-                {displayContent}
-              </SyntaxHighlighter>
-            </div>
-          ) : item.content_type === 'text/code' && item.language ? (
-            item.language === 'markdown' ? (
-              <div
-                className="prose prose-sm prose-slate max-w-none bg-white p-4 rounded border border-gray-200 overflow-auto prose-ul:list-disc prose-ol:list-decimal prose-li:ml-4"
-                style={{ maxHeight: isExpanded ? 'none' : '400px' }}
-              >
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{displayContent}</ReactMarkdown>
-              </div>
-            ) : (
-              <div className="rounded overflow-hidden">
-                <SyntaxHighlighter
-                  language={item.language}
-                  style={oneLight}
-                  customStyle={{
-                    ...syntaxHighlighterCustomStyle,
-                    maxHeight: isExpanded ? 'none' : '400px',
-                    overflow: 'auto',
-                  }}
-                  lineNumberStyle={syntaxLineNumberStyle}
-                  showLineNumbers
-                >
-                  {displayContent}
-                </SyntaxHighlighter>
-              </div>
-            )
-          ) : (
-            <pre className="whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded overflow-auto max-h-96">
-              {displayContent}
-            </pre>
-          )}
+  const renderContent = (content: string, mode: 'preview' | 'immersive') => {
+    const maxHeight = mode === 'immersive' ? 'calc(100vh - 15rem)' : isExpanded ? 'none' : '400px';
+    const plainTextClassName =
+      mode === 'immersive'
+        ? 'whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-5 rounded-lg overflow-auto border border-gray-200'
+        : 'whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded overflow-auto max-h-96';
 
-          {isLongContent && !isExpanded && (
-            <div className="absolute bottom-0 left-0 right-0 h-16 bg-linear-to-t from-white to-transparent" />
-          )}
-        </div>
-
-        {isLongContent && (
-          <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="mt-3 text-sm text-blue-600 hover:underline cursor-pointer"
+    if (shouldRenderFormattedJson) {
+      return (
+        <div className="rounded-lg overflow-hidden border border-gray-200">
+          <SyntaxHighlighter
+            language="json"
+            style={oneLight}
+            customStyle={{
+              ...syntaxHighlighterCustomStyle,
+              maxHeight,
+              overflow: 'auto',
+            }}
+            lineNumberStyle={syntaxLineNumberStyle}
+            showLineNumbers
           >
-            {isExpanded ? 'Show less' : 'Show more'}
-          </button>
-        )}
+            {content}
+          </SyntaxHighlighter>
+        </div>
+      );
+    }
+
+    if (item.content_type === 'text/code' && item.language) {
+      if (item.language === 'markdown') {
+        return (
+          <div
+            className="prose prose-sm prose-slate max-w-none bg-white p-4 rounded-lg border border-gray-200 overflow-auto prose-ul:list-disc prose-ol:list-decimal prose-li:ml-4"
+            style={{ maxHeight }}
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+          </div>
+        );
+      }
+
+      return (
+        <div className="rounded-lg overflow-hidden border border-gray-200">
+          <SyntaxHighlighter
+            language={item.language}
+            style={oneLight}
+            customStyle={{
+              ...syntaxHighlighterCustomStyle,
+              maxHeight,
+              overflow: 'auto',
+            }}
+            lineNumberStyle={syntaxLineNumberStyle}
+            showLineNumbers
+          >
+            {content}
+          </SyntaxHighlighter>
+        </div>
+      );
+    }
+
+    return (
+      <pre className={plainTextClassName} style={{ maxHeight }}>
+        {content}
+      </pre>
+    );
+  };
+
+  return (
+    <>
+      <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden transition-all hover:shadow-lg">
+        <div className="p-4">
+          <div className="flex items-start justify-between mb-3">
+            <div className="flex items-center gap-2">{renderBadges()}</div>
+            <div className="flex items-center gap-2">
+              {hasJsonFormat && (
+                <button
+                  onClick={() => setIsJsonFormatted(current => !current)}
+                  className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                  title={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}
+                >
+                  {isJsonFormatted ? 'Raw' : 'Beautify'}
+                </button>
+              )}
+              <button
+                onClick={() => setIsImmersiveOpen(true)}
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Open immersive view"
+                aria-label="Open immersive view"
+              >
+                <ArrowsPointingOutIcon className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleCopy}
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Copy to clipboard"
+                aria-label="Copy to clipboard"
+              >
+                {copied ? (
+                  <CheckIcon className="w-5 h-5 text-green-600" />
+                ) : (
+                  <ClipboardDocumentIcon className="w-5 h-5" />
+                )}
+              </button>
+              <button
+                onClick={handleDelete}
+                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                title="Delete"
+                aria-label="Delete"
+              >
+                <TrashIcon className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          <div className="relative">
+            {renderContent(displayContent, 'preview')}
+
+            {isLongContent && !isExpanded && (
+              <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-linear-to-t from-white to-transparent" />
+            )}
+          </div>
+
+          {isLongContent && (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="mt-3 text-sm text-blue-600 hover:underline cursor-pointer"
+            >
+              {isExpanded ? 'Show less' : 'Show more'}
+            </button>
+          )}
+        </div>
       </div>
-    </div>
+
+      {isImmersiveOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 px-3 py-4 backdrop-blur-sm sm:px-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Immersive clipboard item view"
+          onClick={() => setIsImmersiveOpen(false)}
+        >
+          <div
+            className="flex max-h-full w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ring-1 ring-white/20"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="flex flex-col gap-3 border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">{renderBadges()}</div>
+                <h2 className="text-lg font-semibold text-gray-900">Clipboard item</h2>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                {hasJsonFormat && (
+                  <button
+                    onClick={() => setIsJsonFormatted(current => !current)}
+                    className="px-3 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                    title={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}
+                  >
+                    {isJsonFormatted ? 'Raw' : 'Beautify'}
+                  </button>
+                )}
+                <button
+                  onClick={handleCopy}
+                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                  title="Copy to clipboard"
+                  aria-label="Copy to clipboard"
+                >
+                  {copied ? (
+                    <CheckIcon className="w-5 h-5 text-green-600" />
+                  ) : (
+                    <ClipboardDocumentIcon className="w-5 h-5" />
+                  )}
+                </button>
+                <button
+                  onClick={handleDelete}
+                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                  title="Delete"
+                  aria-label="Delete"
+                >
+                  <TrashIcon className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => setIsImmersiveOpen(false)}
+                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                  title="Close"
+                  aria-label="Close immersive view"
+                >
+                  <XMarkIcon className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto bg-slate-100 p-3 sm:p-5">
+              {renderContent(contentForDisplay, 'immersive')}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
