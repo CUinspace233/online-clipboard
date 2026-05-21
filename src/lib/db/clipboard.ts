@@ -12,6 +12,38 @@ const client = createClient({
 
 let schemaInitialized = false;
 
+interface ClipboardItemFilters {
+  contentType?: 'text/plain' | 'text/code';
+  search?: string;
+  language?: string;
+}
+
+function buildClipboardItemsWhereClause(filters: ClipboardItemFilters = {}) {
+  const conditions: string[] = [];
+  const args: (string | number)[] = [];
+
+  if (filters.contentType) {
+    conditions.push('content_type = ?');
+    args.push(filters.contentType);
+  }
+
+  if (filters.search) {
+    conditions.push('LOWER(content) LIKE ?');
+    const searchPattern = `%${filters.search.toLowerCase()}%`;
+    args.push(searchPattern);
+  }
+
+  if (filters.language) {
+    conditions.push('language = ?');
+    args.push(filters.language);
+  }
+
+  return {
+    whereClause: conditions.length > 0 ? ` WHERE ${conditions.join(' AND ')}` : '',
+    args,
+  };
+}
+
 /**
  * Initialize database schema
  * Creates clipboard_items table and indexes if they don't exist
@@ -52,26 +84,27 @@ export async function initSchema(): Promise<void> {
 export async function getClipboardItems(
   limit: number = 50,
   offset: number = 0,
-  contentType?: 'text/plain' | 'text/code'
+  contentType?: 'text/plain' | 'text/code',
+  search?: string,
+  language?: string
 ): Promise<ClipboardItem[]> {
   try {
-    let query = `
+    const { whereClause, args } = buildClipboardItemsWhereClause({
+      contentType,
+      search,
+      language,
+    });
+
+    const query = `
       SELECT id, content, content_type, language, created_at, updated_at, metadata
       FROM clipboard_items
+      ${whereClause}
+      ORDER BY created_at DESC LIMIT ? OFFSET ?
     `;
-    const params: (string | number)[] = [];
-
-    if (contentType) {
-      query += ` WHERE content_type = ?`;
-      params.push(contentType);
-    }
-
-    query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`;
-    params.push(limit, offset);
 
     const result = await client.execute({
       sql: query,
-      args: params,
+      args: [...args, limit, offset],
     });
 
     return result.rows.map(row => ({
@@ -252,6 +285,33 @@ export async function getClipboardItemsCount(): Promise<number> {
     return Number(result.rows[0].count);
   } catch (error) {
     console.error('Failed to get clipboard items count:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get count of clipboard items with optional filtering
+ */
+export async function getFilteredClipboardItemsCount(
+  contentType?: 'text/plain' | 'text/code',
+  search?: string,
+  language?: string
+): Promise<number> {
+  try {
+    const { whereClause, args } = buildClipboardItemsWhereClause({
+      contentType,
+      search,
+      language,
+    });
+
+    const result = await client.execute({
+      sql: `SELECT COUNT(*) as count FROM clipboard_items${whereClause}`,
+      args,
+    });
+
+    return Number(result.rows[0].count);
+  } catch (error) {
+    console.error('Failed to get filtered clipboard items count:', error);
     throw error;
   }
 }

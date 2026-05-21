@@ -21,3 +21,11 @@ export interface UpdateClipboardItemData {
   language?: string;
   metadata?: Record<string, unknown>;
 }
+
+export interface ClipboardItemsResponse {
+  items: ClipboardItem[];
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
+}

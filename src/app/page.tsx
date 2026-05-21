@@ -1,11 +1,13 @@
 'use client';
 
-import { useState, useCallback } from 'react';
-import useSWR from 'swr';
+import { useState, useCallback, useMemo } from 'react';
+import useSWRInfinite from 'swr/infinite';
 import {
   ArrowRightOnRectangleIcon,
   ClipboardDocumentIcon,
   ArrowsRightLeftIcon,
+  MagnifyingGlassIcon,
+  XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthForm } from '@/components/auth/AuthForm';
@@ -13,14 +15,20 @@ import { ClipboardStats } from '@/components/clipboard/ClipboardStats';
 import { ClipboardInput } from '@/components/clipboard/ClipboardInput';
 import { ClipboardList } from '@/components/clipboard/ClipboardList';
 import { FileTransferPanel } from '@/components/transfer/FileTransferPanel';
-import type { ClipboardItem } from '@/types/clipboard';
+import { SUPPORTED_LANGUAGES } from '@/lib/clipboard/constants';
+import type { ClipboardItem, ClipboardItemsResponse } from '@/types/clipboard';
 
 type Tab = 'clipboard' | 'transfer';
+const pageSize = 20;
+const allLanguagesValue = 'all';
 
 export default function Home() {
   const { user, token, isLoading: authLoading, login, register, logout, isAuthenticated } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('clipboard');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [submittedSearchTerm, setSubmittedSearchTerm] = useState('');
+  const [selectedLanguage, setSelectedLanguage] = useState(allLanguagesValue);
 
   const fetcher = useCallback(
     async (url: string) => {
@@ -42,18 +50,55 @@ export default function Home() {
   );
 
   const {
-    data: items,
+    data: clipboardPages,
     error,
     mutate,
-  } = useSWR<ClipboardItem[]>(
-    isAuthenticated ? '/api/clipboard' : null,
+    size,
+    setSize,
+    isValidating,
+  } = useSWRInfinite<ClipboardItemsResponse>(
+    (pageIndex, previousPageData) => {
+      if (!isAuthenticated || (previousPageData && !previousPageData.hasMore)) {
+        return null;
+      }
+
+      const params = new URLSearchParams({
+        limit: String(pageSize),
+        offset: String(pageIndex * pageSize),
+      });
+
+      if (submittedSearchTerm) {
+        params.set('search', submittedSearchTerm);
+      }
+
+      if (selectedLanguage !== allLanguagesValue) {
+        params.set('language', selectedLanguage);
+      }
+
+      return `/api/clipboard?${params.toString()}`;
+    },
     fetcher,
     {
       // refreshInterval: 3000, // 轮询已关闭以节省 Vercel 资源
       revalidateOnFocus: true,
       revalidateOnReconnect: true,
+      keepPreviousData: true,
     }
   );
+
+  const items = useMemo(
+    () => clipboardPages?.flatMap(page => page.items) || [],
+    [clipboardPages]
+  );
+  const firstPage = clipboardPages?.[0];
+  const lastPage = clipboardPages?.[clipboardPages.length - 1];
+  const totalItems = firstPage?.total || 0;
+  const hasMore = lastPage?.hasMore || false;
+  const isLoadingMore =
+    isValidating && (!clipboardPages || typeof clipboardPages[size - 1] === 'undefined');
+  const hasActiveFilters =
+    submittedSearchTerm.length > 0 || selectedLanguage !== allLanguagesValue;
+  const isRefreshingResults = isValidating && !!clipboardPages && !isLoadingMore;
 
   const handleCreate = useCallback(
     async (content: string, contentType: 'text/plain' | 'text/code', language?: string) => {
@@ -62,27 +107,22 @@ export default function Home() {
       setIsCreating(true);
 
       try {
-        mutate(async currentItems => {
-          const response = await fetch('/api/clipboard', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              content,
-              content_type: contentType,
-              language,
-            }),
-          });
+        const response = await fetch('/api/clipboard', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            content,
+            content_type: contentType,
+            language,
+          }),
+        });
 
-          if (!response.ok) {
-            throw new Error('Failed to create clipboard item');
-          }
-
-          const createdItem = await response.json();
-          return [createdItem, ...(currentItems || [])];
-        }, false);
+        if (!response.ok) {
+          throw new Error('Failed to create clipboard item');
+        }
 
         await mutate();
       } catch (error) {
@@ -100,8 +140,8 @@ export default function Home() {
       if (!token) return;
 
       try {
-        mutate(
-          async currentItems => {
+        await mutate(
+          async currentPages => {
             const response = await fetch(`/api/clipboard/${id}`, {
               method: 'DELETE',
               headers: {
@@ -113,11 +153,32 @@ export default function Home() {
               throw new Error('Failed to delete clipboard item');
             }
 
-            return (currentItems || []).filter(item => item.id !== id);
+            return (currentPages || []).map(page => {
+              const nextItems = page.items.filter(item => item.id !== id);
+              const nextTotal = Math.max(page.total - 1, 0);
+
+              return {
+                ...page,
+                items: nextItems,
+                total: nextTotal,
+                hasMore: page.offset + nextItems.length < nextTotal,
+              };
+            });
           },
           {
-            optimisticData: (items || []).filter(item => item.id !== id),
+            optimisticData: (clipboardPages || []).map(page => {
+              const nextItems = page.items.filter(item => item.id !== id);
+              const nextTotal = Math.max(page.total - 1, 0);
+
+              return {
+                ...page,
+                items: nextItems,
+                total: nextTotal,
+                hasMore: page.offset + nextItems.length < nextTotal,
+              };
+            }),
             rollbackOnError: true,
+            revalidate: false,
           }
         );
       } catch (error) {
@@ -125,7 +186,7 @@ export default function Home() {
         alert('Failed to delete clipboard item. Please try again.');
       }
     },
-    [mutate, token, items]
+    [mutate, token, clipboardPages]
   );
 
   const handleUpdate = useCallback(
@@ -141,7 +202,7 @@ export default function Home() {
 
       try {
         await mutate(
-          async currentItems => {
+          async currentPages => {
             const response = await fetch(`/api/clipboard/${id}`, {
               method: 'PATCH',
               headers: {
@@ -156,24 +217,52 @@ export default function Home() {
             }
 
             const updatedItem = await response.json();
-            return (currentItems || []).map(item => (item.id === id ? updatedItem : item));
+            return (currentPages || []).map(page => ({
+              ...page,
+              items: page.items.map(item => (item.id === id ? updatedItem : item)),
+            }));
           },
           {
-            optimisticData: (items || []).map(item =>
-              item.id === id ? { ...item, ...data, updated_at: Date.now() } : item
-            ),
+            optimisticData: (clipboardPages || []).map(page => ({
+              ...page,
+              items: page.items.map(item =>
+                item.id === id ? { ...item, ...data, updated_at: Date.now() } : item
+              ),
+            })),
             rollbackOnError: true,
             revalidate: false,
           }
         );
+
+        if (hasActiveFilters) {
+          await mutate();
+        }
       } catch (error) {
         console.error('Failed to update clipboard item:', error);
         alert('Failed to update clipboard item. Please try again.');
         throw error;
       }
     },
-    [mutate, token, items]
+    [mutate, token, clipboardPages, hasActiveFilters]
   );
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSubmittedSearchTerm('');
+    setSelectedLanguage(allLanguagesValue);
+    setSize(1);
+  };
+
+  const handleSearchSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setSubmittedSearchTerm(searchTerm.trim());
+    setSize(1);
+  };
+
+  const handleLanguageChange = (language: string) => {
+    setSelectedLanguage(language);
+    setSize(1);
+  };
 
   const handleLogout = async () => {
     if (confirm('Are you sure you want to logout?')) {
@@ -198,7 +287,7 @@ export default function Home() {
     return <AuthForm onLogin={login} onRegister={register} isLoading={false} />;
   }
 
-  const isLoading = !items && !error;
+  const isLoading = !clipboardPages && !error;
   const isConnected = !error && !isLoading;
 
   return (
@@ -275,9 +364,109 @@ export default function Home() {
             </div>
           ) : (
             <div className="space-y-6">
-              <ClipboardStats totalItems={items?.length || 0} isConnected={isConnected} />
+              <ClipboardStats totalItems={totalItems} isConnected={isConnected} />
               <ClipboardInput onCreate={handleCreate} isLoading={isCreating} />
-              <ClipboardList items={items || []} onDelete={handleDelete} onUpdate={handleUpdate} />
+              <form
+                onSubmit={handleSearchSubmit}
+                className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm"
+              >
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="relative flex-1">
+                    <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={searchTerm}
+                      onChange={event => setSearchTerm(event.target.value)}
+                      placeholder="Search content..."
+                      className="w-full rounded-lg border border-gray-300 bg-gray-50 py-2.5 pl-10 pr-10 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500"
+                    />
+                    {searchTerm && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchTerm('');
+                          if (submittedSearchTerm) {
+                            setSubmittedSearchTerm('');
+                            setSize(1);
+                          }
+                        }}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-gray-500 transition hover:bg-gray-100 hover:text-gray-900 cursor-pointer"
+                        title="Clear search"
+                        aria-label="Clear search"
+                      >
+                        <XMarkIcon className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                    <select
+                      value={selectedLanguage}
+                      onChange={event => handleLanguageChange(event.target.value)}
+                      className="rounded-lg border border-gray-300 bg-gray-50 px-3 py-2.5 text-sm text-gray-700 outline-none transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                    >
+                      <option value={allLanguagesValue}>All languages</option>
+                      {SUPPORTED_LANGUAGES.map(language => (
+                        <option key={language} value={language}>
+                          {language.charAt(0).toUpperCase() + language.slice(1)}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="submit"
+                      disabled={searchTerm.trim() === submittedSearchTerm}
+                      className="rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400 cursor-pointer"
+                    >
+                      Search
+                    </button>
+
+                    {hasActiveFilters && (
+                      <button
+                        type="button"
+                        onClick={handleClearFilters}
+                        className="rounded-lg px-3 py-2 text-sm font-medium text-gray-600 transition hover:bg-gray-100 hover:text-gray-900 cursor-pointer"
+                      >
+                        Clear filters
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-between gap-3 text-sm text-gray-600">
+                  <div>
+                    <span className="font-semibold text-gray-900">{totalItems}</span>{' '}
+                    {totalItems === 1 ? 'result' : 'results'}
+                  </div>
+                  {isRefreshingResults && (
+                    <div className="flex items-center gap-2 text-blue-600">
+                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
+                      Updating results...
+                    </div>
+                  )}
+                </div>
+              </form>
+              <ClipboardList
+                items={items}
+                onDelete={handleDelete}
+                onUpdate={handleUpdate}
+                isFiltered={hasActiveFilters}
+              />
+              {items.length > 0 && (
+                <div className="flex justify-center">
+                  {hasMore ? (
+                    <button
+                      type="button"
+                      onClick={() => setSize(size + 1)}
+                      disabled={isLoadingMore}
+                      className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400 cursor-pointer"
+                    >
+                      {isLoadingMore ? 'Loading...' : 'Load more'}
+                    </button>
+                  ) : (
+                    <p className="text-sm text-gray-500">No more items</p>
+                  )}
+                </div>
+              )}
             </div>
           )
         ) : (

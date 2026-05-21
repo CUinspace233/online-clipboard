@@ -5,9 +5,11 @@ import {
   createClipboardItem,
   cleanupOldItems,
   getClipboardItemsCount,
+  getFilteredClipboardItemsCount,
 } from '@/lib/db/clipboard';
 import { authenticateRequest } from '@/lib/auth/middleware';
-import type { CreateClipboardItemData } from '@/types/clipboard';
+import { SUPPORTED_LANGUAGES } from '@/lib/clipboard/constants';
+import type { ClipboardItemsResponse, CreateClipboardItemData } from '@/types/clipboard';
 
 // Initialize schema on first API call
 let schemaChecked = false;
@@ -32,8 +34,10 @@ export async function GET(request: NextRequest) {
     }
 
     const searchParams = request.nextUrl.searchParams;
-    const limit = Math.min(Number(searchParams.get('limit')) || 50, 100);
-    const offset = Number(searchParams.get('offset')) || 0;
+    const limit = Math.min(Math.max(Number(searchParams.get('limit')) || 50, 1), 100);
+    const offset = Math.max(Number(searchParams.get('offset')) || 0, 0);
+    const search = searchParams.get('search')?.trim() || undefined;
+    const language = searchParams.get('language')?.trim() || undefined;
     const contentType = searchParams.get('content_type') as
       | 'text/plain'
       | 'text/code'
@@ -47,9 +51,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const items = await getClipboardItems(limit, offset, contentType || undefined);
+    if (language && !SUPPORTED_LANGUAGES.includes(language as (typeof SUPPORTED_LANGUAGES)[number])) {
+      return NextResponse.json({ error: 'Invalid language filter' }, { status: 400 });
+    }
 
-    return NextResponse.json(items, {
+    const items = await getClipboardItems(
+      limit,
+      offset,
+      contentType || undefined,
+      search,
+      language
+    );
+    const total = await getFilteredClipboardItemsCount(contentType || undefined, search, language);
+    const response: ClipboardItemsResponse = {
+      items,
+      total,
+      limit,
+      offset,
+      hasMore: offset + items.length < total,
+    };
+
+    return NextResponse.json(response, {
       headers: {
         'Cache-Control': 'no-store, max-age=0',
       },
