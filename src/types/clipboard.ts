@@ -14,3 +14,10 @@ export interface CreateClipboardItemData {
   language?: string;
   metadata?: Record<string, unknown>;
 }
+
+export interface UpdateClipboardItemData {
+  content: string;
+  content_type: 'text/plain' | 'text/code';
+  language?: string;
+  metadata?: Record<string, unknown>;
+}

@@ -7,9 +7,17 @@ import type { ClipboardItem as ClipboardItemType } from '@/types/clipboard';
 interface ClipboardListProps {
   items: ClipboardItemType[];
   onDelete: (id: number) => void;
+  onUpdate: (
+    id: number,
+    data: {
+      content: string;
+      content_type: 'text/plain' | 'text/code';
+      language?: string;
+    }
+  ) => Promise<void>;
 }
 
-export function ClipboardList({ items, onDelete }: ClipboardListProps) {
+export function ClipboardList({ items, onDelete, onUpdate }: ClipboardListProps) {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -27,7 +35,7 @@ export function ClipboardList({ items, onDelete }: ClipboardListProps) {
   return (
     <div className="space-y-4">
       {items.map(item => (
-        <ClipboardItem key={item.id} item={item} onDelete={onDelete} />
+        <ClipboardItem key={item.id} item={item} onDelete={onDelete} onUpdate={onUpdate} />
       ))}
     </div>
   );

@@ -1,5 +1,9 @@
 import { createClient } from '@libsql/client';
-import type { ClipboardItem, CreateClipboardItemData } from '@/types/clipboard';
+import type {
+  ClipboardItem,
+  CreateClipboardItemData,
+  UpdateClipboardItemData,
+} from '@/types/clipboard';
 
 const client = createClient({
   url: process.env.TURSO_DATABASE_URL || '',
@@ -148,6 +152,47 @@ export async function createClipboardItem(data: CreateClipboardItemData): Promis
     };
   } catch (error) {
     console.error('Failed to create clipboard item:', error);
+    throw error;
+  }
+}
+
+/**
+ * Update an existing clipboard item by ID
+ */
+export async function updateClipboardItem(
+  id: number,
+  data: UpdateClipboardItemData
+): Promise<ClipboardItem | null> {
+  try {
+    const now = Date.now();
+    const metadata = data.metadata ? JSON.stringify(data.metadata) : null;
+
+    const result = await client.execute({
+      sql: `
+        UPDATE clipboard_items
+        SET content = ?, content_type = ?, language = ?, updated_at = ?, metadata = ?
+        WHERE id = ?
+        RETURNING id, content, content_type, language, created_at, updated_at, metadata
+      `,
+      args: [data.content, data.content_type, data.language || null, now, metadata, id],
+    });
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0];
+    return {
+      id: Number(row.id),
+      content: String(row.content),
+      content_type: row.content_type as 'text/plain' | 'text/code',
+      language: row.language ? String(row.language) : undefined,
+      created_at: Number(row.created_at),
+      updated_at: Number(row.updated_at),
+      metadata: row.metadata ? String(row.metadata) : undefined,
+    };
+  } catch (error) {
+    console.error('Failed to update clipboard item:', error);
     throw error;
   }
 }

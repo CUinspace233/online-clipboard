@@ -2,32 +2,12 @@
 
 import { useState } from 'react';
 import { PaperAirplaneIcon } from '@heroicons/react/24/solid';
+import { SUPPORTED_LANGUAGES } from '@/lib/clipboard/constants';
 
 interface ClipboardInputProps {
   onCreate: (content: string, contentType: 'text/plain' | 'text/code', language?: string) => void;
   isLoading: boolean;
 }
-
-const SUPPORTED_LANGUAGES = [
-  'javascript',
-  'typescript',
-  'python',
-  'java',
-  'cpp',
-  'csharp',
-  'go',
-  'rust',
-  'php',
-  'ruby',
-  'swift',
-  'kotlin',
-  'html',
-  'css',
-  'sql',
-  'bash',
-  'json',
-  'markdown',
-];
 
 export function ClipboardInput({ onCreate, isLoading }: ClipboardInputProps) {
   const [content, setContent] = useState('');

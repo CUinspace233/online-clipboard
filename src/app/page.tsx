@@ -128,6 +128,53 @@ export default function Home() {
     [mutate, token, items]
   );
 
+  const handleUpdate = useCallback(
+    async (
+      id: number,
+      data: {
+        content: string;
+        content_type: 'text/plain' | 'text/code';
+        language?: string;
+      }
+    ) => {
+      if (!token) return;
+
+      try {
+        await mutate(
+          async currentItems => {
+            const response = await fetch(`/api/clipboard/${id}`, {
+              method: 'PATCH',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify(data),
+            });
+
+            if (!response.ok) {
+              throw new Error('Failed to update clipboard item');
+            }
+
+            const updatedItem = await response.json();
+            return (currentItems || []).map(item => (item.id === id ? updatedItem : item));
+          },
+          {
+            optimisticData: (items || []).map(item =>
+              item.id === id ? { ...item, ...data, updated_at: Date.now() } : item
+            ),
+            rollbackOnError: true,
+            revalidate: false,
+          }
+        );
+      } catch (error) {
+        console.error('Failed to update clipboard item:', error);
+        alert('Failed to update clipboard item. Please try again.');
+        throw error;
+      }
+    },
+    [mutate, token, items]
+  );
+
   const handleLogout = async () => {
     if (confirm('Are you sure you want to logout?')) {
       await logout();
@@ -230,7 +277,7 @@ export default function Home() {
             <div className="space-y-6">
               <ClipboardStats totalItems={items?.length || 0} isConnected={isConnected} />
               <ClipboardInput onCreate={handleCreate} isLoading={isCreating} />
-              <ClipboardList items={items || []} onDelete={handleDelete} />
+              <ClipboardList items={items || []} onDelete={handleDelete} onUpdate={handleUpdate} />
             </div>
           )
         ) : (

@@ -9,18 +9,29 @@ import {
   ArrowsPointingOutIcon,
   CheckIcon,
   ClipboardDocumentIcon,
+  PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useClipboard } from '@/hooks/useClipboard';
+import { SUPPORTED_LANGUAGES } from '@/lib/clipboard/constants';
 import type { ClipboardItem as ClipboardItemType } from '@/types/clipboard';
 
 interface ClipboardItemProps {
   item: ClipboardItemType;
   onDelete: (id: number) => void;
+  onUpdate: (
+    id: number,
+    data: {
+      content: string;
+      content_type: 'text/plain' | 'text/code';
+      language?: string;
+    }
+  ) => Promise<void>;
 }
 
 const previewLength = 500;
+const maxContentLength = 100000;
 const syntaxHighlighterCustomStyle = {
   margin: 0,
   padding: '1rem',
@@ -50,9 +61,16 @@ function formatJsonForDisplay(content: string) {
   }
 }
 
-export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
+export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isImmersiveOpen, setIsImmersiveOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [editContent, setEditContent] = useState(item.content);
+  const [editContentType, setEditContentType] = useState<'text/plain' | 'text/code'>(
+    item.content_type
+  );
+  const [editLanguage, setEditLanguage] = useState(item.language || 'javascript');
   const [isJsonFormatted, setIsJsonFormatted] = useState(false);
   const { copied, copyToClipboard } = useClipboard();
 
@@ -63,13 +81,20 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
     shouldRenderFormattedJson && formattedJson !== null ? formattedJson : item.content;
   const isLongContent = contentForDisplay.length > previewLength;
   const displayContent = isExpanded ? contentForDisplay : contentForDisplay.slice(0, previewLength);
+  const isEditingOverLimit = editContent.length > maxContentLength;
+  const isEditingEmpty = editContent.trim().length === 0;
+  const wasEdited = item.updated_at - item.created_at > 1000;
 
   useEffect(() => {
-    if (!isImmersiveOpen) return;
+    if (!isImmersiveOpen && !isEditOpen) return;
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setIsImmersiveOpen(false);
+        if (isEditOpen) {
+          setIsEditOpen(false);
+        } else {
+          setIsImmersiveOpen(false);
+        }
       }
     };
 
@@ -81,7 +106,7 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
       document.removeEventListener('keydown', handleKeyDown);
       document.body.style.overflow = originalOverflow;
     };
-  }, [isImmersiveOpen]);
+  }, [isImmersiveOpen, isEditOpen]);
 
   const handleCopy = () => {
     copyToClipboard(item.content);
@@ -89,8 +114,39 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
 
   const handleDelete = () => {
     if (confirm('Are you sure you want to delete this item?')) {
+      setIsEditOpen(false);
       setIsImmersiveOpen(false);
       onDelete(item.id);
+    }
+  };
+
+  const openEdit = () => {
+    setEditContent(item.content);
+    setEditContentType(item.content_type);
+    setEditLanguage(item.language || 'javascript');
+    setIsEditOpen(true);
+  };
+
+  const handleEditSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (isEditingEmpty || isEditingOverLimit || isSaving) {
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await onUpdate(item.id, {
+        content: editContent,
+        content_type: editContentType,
+        language: editContentType === 'text/code' ? editLanguage : undefined,
+      });
+      setIsExpanded(false);
+      setIsJsonFormatted(false);
+      setIsEditOpen(false);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -120,7 +176,12 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
           JSON
         </span>
       )}
-      <span className="text-xs text-gray-500">{formatTimestamp(item.created_at)}</span>
+      <span className="text-xs text-gray-500">created {formatTimestamp(item.created_at)}</span>
+      {wasEdited && (
+        <span className="text-xs font-medium text-amber-700">
+          edited {formatTimestamp(item.updated_at)}
+        </span>
+      )}
     </>
   );
 
@@ -214,6 +275,14 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
                 <ArrowsPointingOutIcon className="w-5 h-5" />
               </button>
               <button
+                onClick={openEdit}
+                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                title="Edit"
+                aria-label="Edit clipboard item"
+              >
+                <PencilSquareIcon className="w-5 h-5" />
+              </button>
+              <button
                 onClick={handleCopy}
                 className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
                 title="Copy to clipboard"
@@ -295,6 +364,14 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
                   )}
                 </button>
                 <button
+                  onClick={openEdit}
+                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
+                  title="Edit"
+                  aria-label="Edit clipboard item"
+                >
+                  <PencilSquareIcon className="w-5 h-5" />
+                </button>
+                <button
                   onClick={handleDelete}
                   className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
                   title="Delete"
@@ -316,6 +393,132 @@ export function ClipboardItem({ item, onDelete }: ClipboardItemProps) {
               {renderContent(contentForDisplay, 'immersive')}
             </div>
           </div>
+        </div>
+      )}
+
+      {isEditOpen && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/75 px-3 py-4 backdrop-blur-sm sm:px-6"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Edit clipboard item"
+          onClick={() => {
+            if (!isSaving) setIsEditOpen(false);
+          }}
+        >
+          <form
+            onSubmit={handleEditSubmit}
+            className="flex max-h-full w-full max-w-5xl flex-col overflow-hidden rounded-lg bg-white shadow-2xl ring-1 ring-white/20"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="flex flex-col gap-3 border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center gap-2">{renderBadges()}</div>
+                <h2 className="text-lg font-semibold text-gray-900">Edit clipboard item</h2>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditOpen(false)}
+                disabled={isSaving}
+                className="self-start rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                title="Close"
+                aria-label="Close edit dialog"
+              >
+                <XMarkIcon className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-auto bg-slate-100 p-3 sm:p-5">
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditContentType('text/plain')}
+                    disabled={isSaving}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
+                      editContentType === 'text/plain'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Text
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setEditContentType('text/code')}
+                    disabled={isSaving}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
+                      editContentType === 'text/code'
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-white text-gray-700 hover:bg-gray-50'
+                    }`}
+                  >
+                    Code
+                  </button>
+                </div>
+
+                {editContentType === 'text/code' && (
+                  <select
+                    value={editLanguage}
+                    onChange={event => setEditLanguage(event.target.value)}
+                    disabled={isSaving}
+                    className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {SUPPORTED_LANGUAGES.map(lang => (
+                      <option key={lang} value={lang}>
+                        {lang.charAt(0).toUpperCase() + lang.slice(1)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <textarea
+                value={editContent}
+                onChange={event => setEditContent(event.target.value)}
+                disabled={isSaving}
+                className="h-[55vh] min-h-80 w-full resize-none rounded-lg border border-gray-300 bg-white px-4 py-3 font-mono text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:cursor-not-allowed disabled:opacity-70"
+              />
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+              <div className="text-sm">
+                <span
+                  className={`font-medium ${
+                    isEditingOverLimit
+                      ? 'text-red-600'
+                      : editContent.length > maxContentLength * 0.9
+                        ? 'text-yellow-600'
+                        : 'text-gray-600'
+                  }`}
+                >
+                  {editContent.length.toLocaleString()}
+                </span>
+                <span className="text-gray-500">
+                  {' '}
+                  / {maxContentLength.toLocaleString()} characters
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditOpen(false)}
+                  disabled={isSaving}
+                  className="rounded-lg px-4 py-2 font-medium text-gray-700 transition-colors hover:bg-gray-100 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditingEmpty || isEditingOverLimit || isSaving}
+                  className="rounded-lg bg-blue-600 px-5 py-2 font-medium text-white transition-colors hover:bg-blue-700 cursor-pointer disabled:cursor-not-allowed disabled:bg-gray-400"
+                >
+                  {isSaving ? 'Saving...' : 'Save changes'}
+                </button>
+              </div>
+            </div>
+          </form>
         </div>
       )}
     </>
