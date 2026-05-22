@@ -1,0 +1,40 @@
+<svg
+  xmlns="http://www.w3.org/2000/svg"
+  viewBox="0 0 512 512"
+  role="img"
+  aria-label="Online Clipboard icon"
+>
+  <defs>
+    <linearGradient
+      id="background"
+      x1="96"
+      y1="64"
+      x2="416"
+      y2="448"
+      gradientUnits="userSpaceOnUse"
+    >
+      <stop offset="0" stop-color="#0f766e" />
+      <stop offset="1" stop-color="#0f172a" />
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" rx="112" fill="url(#background)" />
+
+  <rect x="142" y="118" width="228" height="294" rx="38" fill="#f8fafc" />
+  <rect x="182" y="84" width="148" height="72" rx="30" fill="#5eead4" />
+  <rect x="212" y="108" width="88" height="20" rx="10" fill="#0f172a" opacity="0.72" />
+
+  <rect x="190" y="214" width="132" height="24" rx="12" fill="#0f172a" opacity="0.88" />
+  <rect x="190" y="274" width="104" height="24" rx="12" fill="#0f172a" opacity="0.5" />
+  <rect x="190" y="334" width="132" height="24" rx="12" fill="#0f172a" opacity="0.24" />
+
+  <circle cx="362" cy="166" r="28" fill="#0f172a" />
+  <path
+    d="M349 166l9 9 18-20"
+    fill="none"
+    stroke="#5eead4"
+    stroke-width="10"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
