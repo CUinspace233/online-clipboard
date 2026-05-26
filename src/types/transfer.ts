@@ -18,7 +18,9 @@ export interface SignalingMessage {
     | 'ice-candidate'
     | 'transfer-request'
     | 'transfer-accept'
-    | 'transfer-reject';
+    | 'transfer-reject'
+    | 'transfer-resume-request'
+    | 'transfer-resume-accept';
   payload: string;
   created_at: number;
   consumed: number;

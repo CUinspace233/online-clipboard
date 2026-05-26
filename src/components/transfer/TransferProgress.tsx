@@ -4,10 +4,12 @@ import type { TransferProgress as TransferProgressType } from '@/lib/webrtc/File
 
 interface TransferProgressProps {
   progress: TransferProgressType | null;
-  state: 'transferring' | 'complete' | 'error';
+  state: 'transferring' | 'complete' | 'paused' | 'error';
   error?: string;
+  canResume?: boolean;
   onCancel?: () => void;
   onReset?: () => void;
+  onResume?: () => void;
 }
 
 function formatBytes(bytes: number): string {
@@ -26,23 +28,28 @@ export function TransferProgress({
   progress,
   state,
   error,
+  canResume,
   onCancel,
   onReset,
+  onResume,
 }: TransferProgressProps) {
   const percent = progress
     ? Math.round((progress.bytesTransferred / progress.totalBytes) * 100)
     : 0;
 
+  const title =
+    state === 'complete'
+      ? 'Transfer Complete'
+      : state === 'error'
+        ? 'Transfer Failed'
+        : state === 'paused'
+          ? 'Transfer Paused'
+          : progress?.fileName || 'Preparing...';
+
   return (
     <div className="bg-white rounded-lg border border-gray-200 p-4">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-sm font-medium text-gray-700">
-          {state === 'complete'
-            ? 'Transfer Complete'
-            : state === 'error'
-              ? 'Transfer Failed'
-              : progress?.fileName || 'Preparing...'}
-        </span>
+        <span className="text-sm font-medium text-gray-700">{title}</span>
         {progress && progress.totalFiles > 1 && (
           <span className="text-xs text-gray-500">
             File {progress.filesCompleted + 1}/{progress.totalFiles}
@@ -58,15 +65,19 @@ export function TransferProgress({
               ? 'bg-green-500'
               : state === 'error'
                 ? 'bg-red-500'
-                : 'bg-blue-500'
+                : state === 'paused'
+                  ? 'bg-yellow-500'
+                  : 'bg-blue-500'
           }`}
           style={{ width: `${state === 'complete' ? 100 : percent}%` }}
         />
       </div>
 
       <div className="flex items-center justify-between text-xs text-gray-500">
-        {state === 'error' ? (
-          <span className="text-red-600">{error || 'An error occurred'}</span>
+        {state === 'error' || state === 'paused' ? (
+          <span className={state === 'error' ? 'text-red-600' : 'text-yellow-700'}>
+            {error || (state === 'paused' ? 'Connection lost' : 'An error occurred')}
+          </span>
         ) : progress ? (
           <>
             <span>
@@ -81,6 +92,22 @@ export function TransferProgress({
 
       <div className="flex justify-end mt-3 gap-2">
         {state === 'transferring' && onCancel && (
+          <button
+            onClick={onCancel}
+            className="px-3 py-1 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+        )}
+        {state === 'paused' && canResume && onResume && (
+          <button
+            onClick={onResume}
+            className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors cursor-pointer"
+          >
+            Resume
+          </button>
+        )}
+        {state === 'paused' && onCancel && (
           <button
             onClick={onCancel}
             className="px-3 py-1 text-sm text-gray-600 hover:text-red-600 hover:bg-red-50 rounded transition-colors cursor-pointer"

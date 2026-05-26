@@ -24,12 +24,14 @@ export function FileTransferPanel() {
     incomingRequest,
     receivedFiles,
     error,
+    canResume,
     onlineDevices,
     sendFiles,
     acceptTransfer,
     rejectTransfer,
     cancelTransfer,
     resetTransfer,
+    resumeTransfer,
   } = useFileTransfer();
 
   const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null);
@@ -120,13 +122,18 @@ export function FileTransferPanel() {
       />
 
       {/* Transfer in progress */}
-      {(state === 'transferring' || state === 'complete' || state === 'error') && (
+      {(state === 'transferring' ||
+        state === 'complete' ||
+        state === 'paused' ||
+        state === 'error') && (
         <TransferProgress
           progress={progress}
-          state={state as 'transferring' | 'complete' | 'error'}
+          state={state as 'transferring' | 'complete' | 'paused' | 'error'}
           error={error}
+          canResume={canResume}
           onCancel={cancelTransfer}
           onReset={resetTransfer}
+          onResume={resumeTransfer}
         />
       )}
 
@@ -153,7 +160,11 @@ export function FileTransferPanel() {
       {/* Status messages */}
       {state === 'requesting' && (
         <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-          <p className="text-sm text-yellow-700">Waiting for the other device to accept...</p>
+          <p className="text-sm text-yellow-700">
+            {progress
+              ? 'Reconnecting to resume transfer...'
+              : 'Waiting for the other device to accept...'}
+          </p>
         </div>
       )}
       {state === 'connecting' && (

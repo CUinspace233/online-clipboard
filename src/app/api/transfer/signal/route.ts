@@ -41,6 +41,8 @@ export async function POST(request: NextRequest) {
       'transfer-request',
       'transfer-accept',
       'transfer-reject',
+      'transfer-resume-request',
+      'transfer-resume-accept',
     ];
     if (!validTypes.includes(type)) {
       return NextResponse.json({ error: 'Invalid signal type' }, { status: 400 });
