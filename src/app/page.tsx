@@ -22,8 +22,133 @@ type Tab = 'clipboard' | 'transfer';
 const pageSize = 20;
 const allLanguagesValue = 'all';
 
+function SkeletonBlock({ className }: { className: string }) {
+  return <div className={`animate-pulse rounded bg-gray-200 ${className}`} aria-hidden="true" />;
+}
+
+function ClipboardItemSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-md">
+      <div className="mb-3 flex items-start justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <SkeletonBlock className="h-6 w-16 bg-blue-100" />
+          <SkeletonBlock className="h-4 w-28" />
+        </div>
+        <div className="flex items-center gap-2">
+          <SkeletonBlock className="h-8 w-8" />
+          <SkeletonBlock className="h-8 w-8" />
+          <SkeletonBlock className="h-8 w-8" />
+        </div>
+      </div>
+
+      <div className="rounded bg-gray-50 p-4">
+        <SkeletonBlock className="mb-3 h-4 w-11/12" />
+        <SkeletonBlock className="mb-3 h-4 w-full" />
+        <SkeletonBlock className="mb-3 h-4 w-4/5" />
+        <SkeletonBlock className="h-4 w-2/3" />
+      </div>
+    </div>
+  );
+}
+
+function ClipboardPageSkeleton() {
+  return (
+    <div className="space-y-6" aria-label="Loading clipboard" role="status">
+      <span className="sr-only">Loading clipboard items</span>
+
+      <div className="flex items-center justify-between rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex items-center gap-2">
+          <SkeletonBlock className="h-3 w-3 rounded-full bg-green-100" />
+          <SkeletonBlock className="h-4 w-24" />
+        </div>
+        <SkeletonBlock className="h-4 w-16" />
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-md">
+        <div className="mb-4 flex items-center gap-2">
+          <SkeletonBlock className="h-10 w-20 bg-blue-100" />
+          <SkeletonBlock className="h-10 w-20" />
+        </div>
+        <SkeletonBlock className="h-40 w-full" />
+        <div className="mt-4 flex items-center justify-between gap-4">
+          <SkeletonBlock className="h-4 w-40" />
+          <SkeletonBlock className="h-10 w-28 bg-blue-100" />
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <SkeletonBlock className="h-10 flex-1" />
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <SkeletonBlock className="h-10 w-full sm:w-36" />
+            <SkeletonBlock className="h-10 w-full sm:w-20 bg-blue-100" />
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between">
+          <SkeletonBlock className="h-4 w-20" />
+          <SkeletonBlock className="h-4 w-28" />
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        {Array.from({ length: 3 }).map((_, index) => (
+          <ClipboardItemSkeleton key={index} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function AuthenticatedHomeSkeleton() {
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="border-b border-gray-200 bg-white">
+        <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-4">
+          <SkeletonBlock className="h-8 w-56" />
+          <div className="flex items-center gap-4">
+            <SkeletonBlock className="h-5 w-32" />
+            <SkeletonBlock className="h-10 w-24" />
+          </div>
+        </div>
+        <div className="mx-auto max-w-4xl px-4">
+          <nav className="flex gap-1">
+            <div className="border-b-2 border-blue-600 px-4 py-2.5">
+              <SkeletonBlock className="h-5 w-24 bg-blue-100" />
+            </div>
+            <div className="border-b-2 border-transparent px-4 py-2.5">
+              <SkeletonBlock className="h-5 w-28" />
+            </div>
+          </nav>
+        </div>
+      </header>
+
+      <main className="mx-auto max-w-4xl px-4 py-8">
+        <ClipboardPageSkeleton />
+      </main>
+    </div>
+  );
+}
+
+function ResultsRefreshingSkeleton() {
+  return (
+    <div className="flex items-center gap-2 text-blue-600" role="status">
+      <span className="sr-only">Updating results</span>
+      <SkeletonBlock className="h-3 w-3 rounded-full bg-blue-200" />
+      <SkeletonBlock className="h-4 w-28 bg-blue-100" />
+    </div>
+  );
+}
+
 export default function Home() {
-  const { user, token, isLoading: authLoading, login, register, logout, isAuthenticated } = useAuth();
+  const {
+    user,
+    token,
+    isLoading: authLoading,
+    login,
+    register,
+    logout,
+    isAuthenticated,
+  } = useAuth();
   const [isCreating, setIsCreating] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>('clipboard');
   const [searchTerm, setSearchTerm] = useState('');
@@ -86,18 +211,14 @@ export default function Home() {
     }
   );
 
-  const items = useMemo(
-    () => clipboardPages?.flatMap(page => page.items) || [],
-    [clipboardPages]
-  );
+  const items = useMemo(() => clipboardPages?.flatMap(page => page.items) || [], [clipboardPages]);
   const firstPage = clipboardPages?.[0];
   const lastPage = clipboardPages?.[clipboardPages.length - 1];
   const totalItems = firstPage?.total || 0;
   const hasMore = lastPage?.hasMore || false;
   const isLoadingMore =
     isValidating && (!clipboardPages || typeof clipboardPages[size - 1] === 'undefined');
-  const hasActiveFilters =
-    submittedSearchTerm.length > 0 || selectedLanguage !== allLanguagesValue;
+  const hasActiveFilters = submittedSearchTerm.length > 0 || selectedLanguage !== allLanguagesValue;
   const isRefreshingResults = isValidating && !!clipboardPages && !isLoadingMore;
 
   const handleCreate = useCallback(
@@ -270,16 +391,8 @@ export default function Home() {
     }
   };
 
-  // Show loading while checking authentication
   if (authLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-          <p className="text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
+    return <AuthenticatedHomeSkeleton />;
   }
 
   // Show auth form if not authenticated
@@ -340,12 +453,7 @@ export default function Home() {
       <main className="max-w-4xl mx-auto px-4 py-8">
         {activeTab === 'clipboard' ? (
           isLoading ? (
-            <div className="flex items-center justify-center min-h-[60vh]">
-              <div className="text-center">
-                <div className="inline-block w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4" />
-                <p className="text-gray-600">Loading clipboard items...</p>
-              </div>
-            </div>
+            <ClipboardPageSkeleton />
           ) : error ? (
             <div className="flex items-center justify-center min-h-[60vh]">
               <div className="text-center max-w-md">
@@ -437,12 +545,7 @@ export default function Home() {
                     <span className="font-semibold text-gray-900">{totalItems}</span>{' '}
                     {totalItems === 1 ? 'result' : 'results'}
                   </div>
-                  {isRefreshingResults && (
-                    <div className="flex items-center gap-2 text-blue-600">
-                      <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" />
-                      Updating results...
-                    </div>
-                  )}
+                  {isRefreshingResults && <ResultsRefreshingSkeleton />}
                 </div>
               </form>
               <ClipboardList
@@ -451,6 +554,14 @@ export default function Home() {
                 onUpdate={handleUpdate}
                 isFiltered={hasActiveFilters}
               />
+              {isLoadingMore && (
+                <div className="space-y-4" aria-label="Loading more clipboard items" role="status">
+                  <span className="sr-only">Loading more clipboard items</span>
+                  {Array.from({ length: 2 }).map((_, index) => (
+                    <ClipboardItemSkeleton key={index} />
+                  ))}
+                </div>
+              )}
               {items.length > 0 && (
                 <div className="flex justify-center">
                   {hasMore ? (
@@ -458,7 +569,7 @@ export default function Home() {
                       type="button"
                       onClick={() => setSize(size + 1)}
                       disabled={isLoadingMore}
-                      className="rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400 cursor-pointer"
+                      className="min-w-32 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-medium text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-400 cursor-pointer"
                     >
                       {isLoadingMore ? 'Loading...' : 'Load more'}
                     </button>
