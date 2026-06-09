@@ -1,4 +1,5 @@
 export const SUPPORTED_LANGUAGES = [
+  'markdown',
   'javascript',
   'typescript',
   'python',
@@ -16,5 +17,4 @@ export const SUPPORTED_LANGUAGES = [
   'sql',
   'bash',
   'json',
-  'markdown',
 ] as const;

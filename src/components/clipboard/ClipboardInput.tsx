@@ -12,7 +12,7 @@ interface ClipboardInputProps {
 export function ClipboardInput({ onCreate, isLoading }: ClipboardInputProps) {
   const [content, setContent] = useState('');
   const [contentType, setContentType] = useState<'text/plain' | 'text/code'>('text/plain');
-  const [language, setLanguage] = useState('javascript');
+  const [language, setLanguage] = useState('markdown');
 
   const maxLength = 100000;
   const isOverLimit = content.length > maxLength;

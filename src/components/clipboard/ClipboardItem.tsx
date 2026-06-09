@@ -70,7 +70,7 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
   const [editContentType, setEditContentType] = useState<'text/plain' | 'text/code'>(
     item.content_type
   );
-  const [editLanguage, setEditLanguage] = useState(item.language || 'javascript');
+  const [editLanguage, setEditLanguage] = useState(item.language || 'markdown');
   const [isJsonFormatted, setIsJsonFormatted] = useState(false);
   const { copied, copyToClipboard } = useClipboard();
 
@@ -123,7 +123,7 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
   const openEdit = () => {
     setEditContent(item.content);
     setEditContentType(item.content_type);
-    setEditLanguage(item.language || 'javascript');
+    setEditLanguage(item.language || 'markdown');
     setIsEditOpen(true);
   };
 
