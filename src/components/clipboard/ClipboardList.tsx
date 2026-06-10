@@ -16,9 +16,18 @@ interface ClipboardListProps {
       language?: string;
     }
   ) => Promise<void>;
+  onShare: (id: number) => Promise<void>;
+  onUnshare: (id: number) => Promise<void>;
 }
 
-export function ClipboardList({ items, isFiltered = false, onDelete, onUpdate }: ClipboardListProps) {
+export function ClipboardList({
+  items,
+  isFiltered = false,
+  onDelete,
+  onUpdate,
+  onShare,
+  onUnshare,
+}: ClipboardListProps) {
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-16 px-4">
@@ -38,7 +47,14 @@ export function ClipboardList({ items, isFiltered = false, onDelete, onUpdate }:
   return (
     <div className="space-y-4">
       {items.map(item => (
-        <ClipboardItem key={item.id} item={item} onDelete={onDelete} onUpdate={onUpdate} />
+        <ClipboardItem
+          key={item.id}
+          item={item}
+          onDelete={onDelete}
+          onUpdate={onUpdate}
+          onShare={onShare}
+          onUnshare={onUnshare}
+        />
       ))}
     </div>
   );

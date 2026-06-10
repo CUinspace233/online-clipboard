@@ -1,7 +1,9 @@
+import { randomUUID } from 'crypto';
 import { createClient } from '@libsql/client';
 import type {
   ClipboardItem,
   CreateClipboardItemData,
+  SharedClipboardItem,
   UpdateClipboardItemData,
 } from '@/types/clipboard';
 
@@ -44,6 +46,41 @@ function buildClipboardItemsWhereClause(filters: ClipboardItemFilters = {}) {
   };
 }
 
+function mapRowToClipboardItem(row: Record<string, unknown>): ClipboardItem {
+  return {
+    id: Number(row.id),
+    content: String(row.content),
+    content_type: row.content_type as 'text/plain' | 'text/code',
+    language: row.language ? String(row.language) : undefined,
+    created_at: Number(row.created_at),
+    updated_at: Number(row.updated_at),
+    metadata: row.metadata ? String(row.metadata) : undefined,
+    share_token: row.share_token ? String(row.share_token) : null,
+  };
+}
+
+function mapRowToSharedClipboardItem(row: Record<string, unknown>): SharedClipboardItem {
+  return {
+    content: String(row.content),
+    content_type: row.content_type as 'text/plain' | 'text/code',
+    language: row.language ? String(row.language) : undefined,
+    created_at: Number(row.created_at),
+  };
+}
+
+async function migrateShareTokenColumn(): Promise<void> {
+  const tableInfo = await client.execute(`PRAGMA table_info(clipboard_items)`);
+  const hasShareToken = tableInfo.rows.some(row => row.name === 'share_token');
+
+  if (!hasShareToken) {
+    await client.execute(`ALTER TABLE clipboard_items ADD COLUMN share_token TEXT NULL`);
+  }
+
+  await client.execute(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_share_token ON clipboard_items(share_token) WHERE share_token IS NOT NULL
+  `);
+}
+
 /**
  * Initialize database schema
  * Creates clipboard_items table and indexes if they don't exist
@@ -69,6 +106,8 @@ export async function initSchema(): Promise<void> {
     await client.execute(`
       CREATE INDEX IF NOT EXISTS idx_created_at ON clipboard_items(created_at DESC)
     `);
+
+    await migrateShareTokenColumn();
 
     schemaInitialized = true;
     console.log('Database schema initialized successfully');
@@ -96,7 +135,7 @@ export async function getClipboardItems(
     });
 
     const query = `
-      SELECT id, content, content_type, language, created_at, updated_at, metadata
+      SELECT id, content, content_type, language, created_at, updated_at, metadata, share_token
       FROM clipboard_items
       ${whereClause}
       ORDER BY created_at DESC LIMIT ? OFFSET ?
@@ -107,15 +146,7 @@ export async function getClipboardItems(
       args: [...args, limit, offset],
     });
 
-    return result.rows.map(row => ({
-      id: Number(row.id),
-      content: String(row.content),
-      content_type: row.content_type as 'text/plain' | 'text/code',
-      language: row.language ? String(row.language) : undefined,
-      created_at: Number(row.created_at),
-      updated_at: Number(row.updated_at),
-      metadata: row.metadata ? String(row.metadata) : undefined,
-    }));
+    return result.rows.map(row => mapRowToClipboardItem(row as Record<string, unknown>));
   } catch (error) {
     console.error('Failed to get clipboard items:', error);
     throw error;
@@ -129,7 +160,7 @@ export async function getClipboardItemById(id: number): Promise<ClipboardItem | 
   try {
     const result = await client.execute({
       sql: `
-        SELECT id, content, content_type, language, created_at, updated_at, metadata
+        SELECT id, content, content_type, language, created_at, updated_at, metadata, share_token
         FROM clipboard_items
         WHERE id = ?
       `,
@@ -140,16 +171,7 @@ export async function getClipboardItemById(id: number): Promise<ClipboardItem | 
       return null;
     }
 
-    const row = result.rows[0];
-    return {
-      id: Number(row.id),
-      content: String(row.content),
-      content_type: row.content_type as 'text/plain' | 'text/code',
-      language: row.language ? String(row.language) : undefined,
-      created_at: Number(row.created_at),
-      updated_at: Number(row.updated_at),
-      metadata: row.metadata ? String(row.metadata) : undefined,
-    };
+    return mapRowToClipboardItem(result.rows[0] as Record<string, unknown>);
   } catch (error) {
     console.error('Failed to get clipboard item:', error);
     throw error;
@@ -168,21 +190,12 @@ export async function createClipboardItem(data: CreateClipboardItemData): Promis
       sql: `
         INSERT INTO clipboard_items (content, content_type, language, created_at, updated_at, metadata)
         VALUES (?, ?, ?, ?, ?, ?)
-        RETURNING id, content, content_type, language, created_at, updated_at, metadata
+        RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
       `,
       args: [data.content, data.content_type, data.language || null, now, now, metadata],
     });
 
-    const row = result.rows[0];
-    return {
-      id: Number(row.id),
-      content: String(row.content),
-      content_type: row.content_type as 'text/plain' | 'text/code',
-      language: row.language ? String(row.language) : undefined,
-      created_at: Number(row.created_at),
-      updated_at: Number(row.updated_at),
-      metadata: row.metadata ? String(row.metadata) : undefined,
-    };
+    return mapRowToClipboardItem(result.rows[0] as Record<string, unknown>);
   } catch (error) {
     console.error('Failed to create clipboard item:', error);
     throw error;
@@ -205,7 +218,7 @@ export async function updateClipboardItem(
         UPDATE clipboard_items
         SET content = ?, content_type = ?, language = ?, updated_at = ?, metadata = ?
         WHERE id = ?
-        RETURNING id, content, content_type, language, created_at, updated_at, metadata
+        RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
       `,
       args: [data.content, data.content_type, data.language || null, now, metadata, id],
     });
@@ -214,16 +227,7 @@ export async function updateClipboardItem(
       return null;
     }
 
-    const row = result.rows[0];
-    return {
-      id: Number(row.id),
-      content: String(row.content),
-      content_type: row.content_type as 'text/plain' | 'text/code',
-      language: row.language ? String(row.language) : undefined,
-      created_at: Number(row.created_at),
-      updated_at: Number(row.updated_at),
-      metadata: row.metadata ? String(row.metadata) : undefined,
-    };
+    return mapRowToClipboardItem(result.rows[0] as Record<string, unknown>);
   } catch (error) {
     console.error('Failed to update clipboard item:', error);
     throw error;
@@ -312,6 +316,95 @@ export async function getFilteredClipboardItemsCount(
     return Number(result.rows[0].count);
   } catch (error) {
     console.error('Failed to get filtered clipboard items count:', error);
+    throw error;
+  }
+}
+
+/**
+ * Enable sharing for a clipboard item, reusing existing token if present
+ */
+export async function enableClipboardItemSharing(id: number): Promise<ClipboardItem | null> {
+  try {
+    const existing = await getClipboardItemById(id);
+    if (!existing) {
+      return null;
+    }
+
+    const shareToken = existing.share_token || randomUUID();
+    const now = Date.now();
+
+    const result = await client.execute({
+      sql: `
+        UPDATE clipboard_items
+        SET share_token = ?, updated_at = ?
+        WHERE id = ?
+        RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
+      `,
+      args: [shareToken, now, id],
+    });
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return mapRowToClipboardItem(result.rows[0] as Record<string, unknown>);
+  } catch (error) {
+    console.error('Failed to enable clipboard item sharing:', error);
+    throw error;
+  }
+}
+
+/**
+ * Disable sharing for a clipboard item
+ */
+export async function disableClipboardItemSharing(id: number): Promise<ClipboardItem | null> {
+  try {
+    const now = Date.now();
+
+    const result = await client.execute({
+      sql: `
+        UPDATE clipboard_items
+        SET share_token = NULL, updated_at = ?
+        WHERE id = ?
+        RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
+      `,
+      args: [now, id],
+    });
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return mapRowToClipboardItem(result.rows[0] as Record<string, unknown>);
+  } catch (error) {
+    console.error('Failed to disable clipboard item sharing:', error);
+    throw error;
+  }
+}
+
+/**
+ * Get a shared clipboard item by share token (public access)
+ */
+export async function getClipboardItemByShareToken(
+  token: string
+): Promise<SharedClipboardItem | null> {
+  try {
+    const result = await client.execute({
+      sql: `
+        SELECT content, content_type, language, created_at
+        FROM clipboard_items
+        WHERE share_token = ?
+      `,
+      args: [token],
+    });
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    return mapRowToSharedClipboardItem(result.rows[0] as Record<string, unknown>);
+  } catch (error) {
+    console.error('Failed to get clipboard item by share token:', error);
     throw error;
   }
 }

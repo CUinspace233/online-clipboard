@@ -1,5 +1,21 @@
 @import 'tailwindcss';
 
+@keyframes tooltip-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-tooltip-in {
+  animation: tooltip-in 150ms ease-out;
+  transform-origin: var(--radix-tooltip-content-transform-origin);
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

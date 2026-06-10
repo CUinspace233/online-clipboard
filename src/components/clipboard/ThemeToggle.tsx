@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { SunIcon, MoonIcon } from '@heroicons/react/24/solid';
+import { TooltipIconButton } from '@/components/ui/Tooltip';
 
 export function ThemeToggle() {
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -41,16 +42,17 @@ export function ThemeToggle() {
   }
 
   return (
-    <button
+    <TooltipIconButton
+      tooltip={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
       onClick={toggleTheme}
-      className="p-2 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-      title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
+      className="!bg-gray-100 dark:!bg-gray-800 hover:!bg-gray-200 dark:hover:!bg-gray-700"
+      aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
     >
       {isDarkMode ? (
         <SunIcon className="w-6 h-6 text-yellow-500" />
       ) : (
         <MoonIcon className="w-6 h-6 text-gray-700" />
       )}
-    </button>
+    </TooltipIconButton>
   );
 }

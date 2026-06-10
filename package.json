@@ -13,6 +13,7 @@
     "@ducanh2912/next-pwa": "^10.2.9",
     "@heroicons/react": "^2.2.0",
     "@libsql/client": "^0.14.0",
+    "@radix-ui/react-tooltip": "^1.2.9",
     "@tailwindcss/typography": "^0.5.19",
     "next": "15.2.8",
     "react": "^19.0.0",

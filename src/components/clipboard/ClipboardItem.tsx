@@ -1,18 +1,18 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import {
   ArrowsPointingOutIcon,
   CheckIcon,
   ClipboardDocumentIcon,
+  LinkIcon,
+  LinkSlashIcon,
   PencilSquareIcon,
   TrashIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
+import { ClipboardContent, formatJsonForDisplay } from '@/components/clipboard/ClipboardContent';
+import { Tooltip, TooltipIconButton } from '@/components/ui/Tooltip';
 import { useClipboard } from '@/hooks/useClipboard';
 import { SUPPORTED_LANGUAGES } from '@/lib/clipboard/constants';
 import type { ClipboardItem as ClipboardItemType } from '@/types/clipboard';
@@ -28,44 +28,27 @@ interface ClipboardItemProps {
       language?: string;
     }
   ) => Promise<void>;
+  onShare: (id: number) => Promise<void>;
+  onUnshare: (id: number) => Promise<void>;
 }
 
 const previewLength = 500;
 const maxContentLength = 100000;
-const syntaxHighlighterCustomStyle = {
-  margin: 0,
-  padding: '1rem',
-  fontSize: '0.875rem',
-  lineHeight: '1.6',
-  background: '#f8fafc',
-  fontFamily:
-    'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-} as const;
-const syntaxLineNumberStyle = {
-  color: '#94a3b8',
-  fontStyle: 'normal',
-  minWidth: '2.75em',
-} as const;
 
-function formatJsonForDisplay(content: string) {
-  const trimmedContent = content.trim();
-
-  if (!trimmedContent.startsWith('{') && !trimmedContent.startsWith('[')) {
-    return null;
-  }
-
-  try {
-    return JSON.stringify(JSON.parse(trimmedContent), null, 2);
-  } catch {
-    return null;
-  }
-}
-
-export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) {
+export function ClipboardItem({
+  item,
+  onDelete,
+  onUpdate,
+  onShare,
+  onUnshare,
+}: ClipboardItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isImmersiveOpen, setIsImmersiveOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isUnsharing, setIsUnsharing] = useState(false);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [editContent, setEditContent] = useState(item.content);
   const [editContentType, setEditContentType] = useState<'text/plain' | 'text/code'>(
     item.content_type
@@ -84,6 +67,10 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
   const isEditingOverLimit = editContent.length > maxContentLength;
   const isEditingEmpty = editContent.trim().length === 0;
   const wasEdited = item.updated_at - item.created_at > 1000;
+  const isShared = Boolean(item.share_token);
+  const shareUrl = item.share_token
+    ? `${typeof window !== 'undefined' ? window.location.origin : ''}/share/${item.share_token}`
+    : '';
 
   useEffect(() => {
     if (!isImmersiveOpen && !isEditOpen) return;
@@ -110,6 +97,42 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
 
   const handleCopy = () => {
     copyToClipboard(item.content);
+  };
+
+  const handleCopyShareLink = async () => {
+    if (!shareUrl || !navigator.clipboard) return;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 2000);
+    } catch (err) {
+      console.error('Copy share link failed:', err);
+    }
+  };
+
+  const handleShare = async () => {
+    if (isSharing || isUnsharing) return;
+
+    setIsSharing(true);
+    try {
+      await onShare(item.id);
+      setShareLinkCopied(true);
+      setTimeout(() => setShareLinkCopied(false), 2000);
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
+  const handleUnshare = async () => {
+    if (isSharing || isUnsharing) return;
+
+    setIsUnsharing(true);
+    try {
+      await onUnshare(item.id);
+    } finally {
+      setIsUnsharing(false);
+    }
   };
 
   const handleDelete = () => {
@@ -164,6 +187,44 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
     return `${days} day${days !== 1 ? 's' : ''} ago`;
   };
 
+  const renderShareControls = () => {
+    if (isShared) {
+      return (
+        <TooltipIconButton
+          tooltip={shareLinkCopied ? 'Link copied!' : 'Copy share link'}
+          onClick={handleCopyShareLink}
+          disabled={isSharing || isUnsharing}
+          aria-label="Copy share link"
+        >
+          {shareLinkCopied ? (
+            <CheckIcon className="w-5 h-5 text-green-600" />
+          ) : (
+            <LinkIcon className="w-5 h-5" />
+          )}
+        </TooltipIconButton>
+      );
+    }
+
+    return (
+      <TooltipIconButton
+        tooltip={
+          isSharing ? 'Creating share link...' : shareLinkCopied ? 'Link copied!' : 'Create share link'
+        }
+        onClick={handleShare}
+        disabled={isSharing || isUnsharing}
+        aria-label="Share"
+      >
+        {isSharing ? (
+          <span className="block h-5 w-5 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+        ) : shareLinkCopied ? (
+          <CheckIcon className="w-5 h-5 text-green-600" />
+        ) : (
+          <LinkIcon className="w-5 h-5" />
+        )}
+      </TooltipIconButton>
+    );
+  };
+
   const renderBadges = () => (
     <>
       {item.content_type === 'text/code' && item.language && (
@@ -176,6 +237,22 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
           JSON
         </span>
       )}
+      {isShared && (
+        <Tooltip label="Stop sharing">
+          <span className="inline-flex">
+            <button
+              type="button"
+              onClick={handleUnshare}
+              disabled={isSharing || isUnsharing}
+              className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs font-semibold text-green-800 transition-colors hover:bg-green-200 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Stop sharing"
+            >
+              Shared
+              <LinkSlashIcon className="h-3.5 w-3.5" />
+            </button>
+          </span>
+        </Tooltip>
+      )}
       <span className="text-xs text-gray-500">created {formatTimestamp(item.created_at)}</span>
       {wasEdited && (
         <span className="text-xs font-medium text-amber-700">
@@ -185,71 +262,6 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
     </>
   );
 
-  const renderContent = (content: string, mode: 'preview' | 'immersive') => {
-    const maxHeight = mode === 'immersive' ? 'calc(100vh - 15rem)' : isExpanded ? 'none' : '400px';
-    const plainTextClassName =
-      mode === 'immersive'
-        ? 'whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-5 rounded-lg overflow-auto border border-gray-200'
-        : 'whitespace-pre-wrap font-mono text-sm text-gray-800 bg-gray-50 p-4 rounded overflow-auto max-h-96';
-
-    if (shouldRenderFormattedJson) {
-      return (
-        <div className="rounded-lg overflow-hidden border border-gray-200">
-          <SyntaxHighlighter
-            language="json"
-            style={oneLight}
-            customStyle={{
-              ...syntaxHighlighterCustomStyle,
-              maxHeight,
-              overflow: 'auto',
-            }}
-            lineNumberStyle={syntaxLineNumberStyle}
-            showLineNumbers
-          >
-            {content}
-          </SyntaxHighlighter>
-        </div>
-      );
-    }
-
-    if (item.content_type === 'text/code' && item.language) {
-      if (item.language === 'markdown') {
-        return (
-          <div
-            className="prose prose-sm prose-slate max-w-none bg-white p-4 rounded-lg border border-gray-200 overflow-auto prose-ul:list-disc prose-ol:list-decimal prose-li:ml-4"
-            style={{ maxHeight }}
-          >
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-          </div>
-        );
-      }
-
-      return (
-        <div className="rounded-lg overflow-hidden border border-gray-200">
-          <SyntaxHighlighter
-            language={item.language}
-            style={oneLight}
-            customStyle={{
-              ...syntaxHighlighterCustomStyle,
-              maxHeight,
-              overflow: 'auto',
-            }}
-            lineNumberStyle={syntaxLineNumberStyle}
-            showLineNumbers
-          >
-            {content}
-          </SyntaxHighlighter>
-        </div>
-      );
-    }
-
-    return (
-      <pre className={plainTextClassName} style={{ maxHeight }}>
-        {content}
-      </pre>
-    );
-  };
-
   return (
     <>
       <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden transition-all hover:shadow-lg">
@@ -258,34 +270,30 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
             <div className="flex items-center gap-2">{renderBadges()}</div>
             <div className="flex items-center gap-2">
               {hasJsonFormat && (
-                <button
-                  onClick={() => setIsJsonFormatted(current => !current)}
-                  className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
-                  title={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}
-                >
-                  {isJsonFormatted ? 'Raw' : 'Beautify'}
-                </button>
+                <Tooltip label={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}>
+                  <button
+                    type="button"
+                    onClick={() => setIsJsonFormatted(current => !current)}
+                    className="px-3 py-1.5 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                  >
+                    {isJsonFormatted ? 'Raw' : 'Beautify'}
+                  </button>
+                </Tooltip>
               )}
-              <button
+              {renderShareControls()}
+              <TooltipIconButton
+                tooltip="Open fullscreen"
                 onClick={() => setIsImmersiveOpen(true)}
-                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                title="Open immersive view"
                 aria-label="Open immersive view"
               >
                 <ArrowsPointingOutIcon className="w-5 h-5" />
-              </button>
-              <button
-                onClick={openEdit}
-                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                title="Edit"
-                aria-label="Edit clipboard item"
-              >
+              </TooltipIconButton>
+              <TooltipIconButton tooltip="Edit" onClick={openEdit} aria-label="Edit clipboard item">
                 <PencilSquareIcon className="w-5 h-5" />
-              </button>
-              <button
+              </TooltipIconButton>
+              <TooltipIconButton
+                tooltip={copied ? 'Copied!' : 'Copy to clipboard'}
                 onClick={handleCopy}
-                className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                title="Copy to clipboard"
                 aria-label="Copy to clipboard"
               >
                 {copied ? (
@@ -293,20 +301,27 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
                 ) : (
                   <ClipboardDocumentIcon className="w-5 h-5" />
                 )}
-              </button>
-              <button
+              </TooltipIconButton>
+              <TooltipIconButton
+                tooltip="Delete"
+                variant="danger"
                 onClick={handleDelete}
-                className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                title="Delete"
                 aria-label="Delete"
               >
                 <TrashIcon className="w-5 h-5" />
-              </button>
+              </TooltipIconButton>
             </div>
           </div>
 
           <div className="relative">
-            {renderContent(displayContent, 'preview')}
+            <ClipboardContent
+              content={displayContent}
+              contentType={item.content_type}
+              language={item.language}
+              mode="preview"
+              isExpanded={isExpanded}
+              isJsonFormatted={isJsonFormatted}
+            />
 
             {isLongContent && !isExpanded && (
               <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 bg-linear-to-t from-white to-transparent" />
@@ -314,12 +329,15 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
           </div>
 
           {isLongContent && (
-            <button
-              onClick={() => setIsExpanded(!isExpanded)}
-              className="mt-3 text-sm text-blue-600 hover:underline cursor-pointer"
-            >
-              {isExpanded ? 'Show less' : 'Show more'}
-            </button>
+            <Tooltip label={isExpanded ? 'Collapse content' : 'Expand content'} side="bottom">
+              <button
+                type="button"
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="mt-3 text-sm text-blue-600 hover:underline cursor-pointer"
+              >
+                {isExpanded ? 'Show less' : 'Show more'}
+              </button>
+            </Tooltip>
           )}
         </div>
       </div>
@@ -343,18 +361,20 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {hasJsonFormat && (
-                  <button
-                    onClick={() => setIsJsonFormatted(current => !current)}
-                    className="px-3 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
-                    title={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}
-                  >
-                    {isJsonFormatted ? 'Raw' : 'Beautify'}
-                  </button>
+                  <Tooltip label={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}>
+                    <button
+                      type="button"
+                      onClick={() => setIsJsonFormatted(current => !current)}
+                      className="px-3 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {isJsonFormatted ? 'Raw' : 'Beautify'}
+                    </button>
+                  </Tooltip>
                 )}
-                <button
+                {renderShareControls()}
+                <TooltipIconButton
+                  tooltip={copied ? 'Copied!' : 'Copy to clipboard'}
                   onClick={handleCopy}
-                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                  title="Copy to clipboard"
                   aria-label="Copy to clipboard"
                 >
                   {copied ? (
@@ -362,35 +382,36 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
                   ) : (
                     <ClipboardDocumentIcon className="w-5 h-5" />
                   )}
-                </button>
-                <button
-                  onClick={openEdit}
-                  className="p-2 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-                  title="Edit"
-                  aria-label="Edit clipboard item"
-                >
+                </TooltipIconButton>
+                <TooltipIconButton tooltip="Edit" onClick={openEdit} aria-label="Edit clipboard item">
                   <PencilSquareIcon className="w-5 h-5" />
-                </button>
-                <button
+                </TooltipIconButton>
+                <TooltipIconButton
+                  tooltip="Delete"
+                  variant="danger"
                   onClick={handleDelete}
-                  className="p-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                  title="Delete"
                   aria-label="Delete"
                 >
                   <TrashIcon className="w-5 h-5" />
-                </button>
-                <button
+                </TooltipIconButton>
+                <TooltipIconButton
+                  tooltip="Close"
+                  variant="neutral"
                   onClick={() => setIsImmersiveOpen(false)}
-                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
-                  title="Close"
                   aria-label="Close immersive view"
                 >
                   <XMarkIcon className="w-5 h-5" />
-                </button>
+                </TooltipIconButton>
               </div>
             </div>
             <div className="flex-1 overflow-auto bg-slate-100 p-3 sm:p-5">
-              {renderContent(contentForDisplay, 'immersive')}
+              <ClipboardContent
+                content={contentForDisplay}
+                contentType={item.content_type}
+                language={item.language}
+                mode="immersive"
+                isJsonFormatted={isJsonFormatted}
+              />
             </div>
           </div>
         </div>
@@ -416,16 +437,16 @@ export function ClipboardItem({ item, onDelete, onUpdate }: ClipboardItemProps) 
                 <div className="mb-2 flex flex-wrap items-center gap-2">{renderBadges()}</div>
                 <h2 className="text-lg font-semibold text-gray-900">Edit clipboard item</h2>
               </div>
-              <button
-                type="button"
+              <TooltipIconButton
+                tooltip="Close"
+                variant="neutral"
                 onClick={() => setIsEditOpen(false)}
                 disabled={isSaving}
-                className="self-start rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900 cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
-                title="Close"
+                className="self-start"
                 aria-label="Close edit dialog"
               >
                 <XMarkIcon className="h-5 w-5" />
-              </button>
+              </TooltipIconButton>
             </div>
 
             <div className="flex-1 overflow-auto bg-slate-100 p-3 sm:p-5">

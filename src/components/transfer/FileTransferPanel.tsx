@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from 'react';
 import { ArrowUpTrayIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { TooltipIconButton } from '@/components/ui/Tooltip';
 import { useFileTransfer } from '@/hooks/useFileTransfer';
 import { DeviceList } from './DeviceList';
 import { TransferProgress } from './TransferProgress';
@@ -223,15 +224,18 @@ export function FileTransferPanel() {
                       <span className="text-gray-400 text-xs whitespace-nowrap">
                         {formatBytes(file.size)}
                       </span>
-                      <button
-                        onClick={(e) => {
+                      <TooltipIconButton
+                        tooltip="Remove file"
+                        variant="danger"
+                        onClick={e => {
                           e.stopPropagation();
                           removeFile(i);
                         }}
-                        className="text-gray-400 hover:text-red-500 cursor-pointer"
+                        className="!p-0.5 text-gray-400 hover:text-red-500 hover:bg-transparent"
+                        aria-label="Remove file"
                       >
                         <XMarkIcon className="w-4 h-4" />
-                      </button>
+                      </TooltipIconButton>
                     </div>
                   </div>
                 ))}

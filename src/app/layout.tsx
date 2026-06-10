@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { TooltipProvider } from '@/components/ui/Tooltip';
 
 const appName = 'Online Clipboard';
 const appDescription = 'Real-time clipboard sharing application with code syntax highlighting';
@@ -33,7 +34,9 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <TooltipProvider>
+          <AuthProvider>{children}</AuthProvider>
+        </TooltipProvider>
       </body>
     </html>
   );

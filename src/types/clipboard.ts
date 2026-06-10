@@ -6,6 +6,14 @@ export interface ClipboardItem {
   created_at: number;
   updated_at: number;
   metadata?: string;
+  share_token?: string | null;
+}
+
+export interface SharedClipboardItem {
+  content: string;
+  content_type: 'text/plain' | 'text/code';
+  language?: string;
+  created_at: number;
 }
 
 export interface CreateClipboardItemData {
