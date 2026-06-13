@@ -20,10 +20,7 @@ async function ensureClipboardSchema() {
  * Enable sharing for a clipboard item
  * Requires authentication
  */
-export async function POST(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const user = await authenticateRequest(request);
     if (!user) {
@@ -39,7 +36,7 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid item ID' }, { status: 400 });
     }
 
-    const item = await enableClipboardItemSharing(itemId);
+    const item = await enableClipboardItemSharing(user.id, itemId);
 
     if (!item || !item.share_token) {
       return NextResponse.json({ error: 'Clipboard item not found' }, { status: 404 });
@@ -82,7 +79,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid item ID' }, { status: 400 });
     }
 
-    const item = await disableClipboardItemSharing(itemId);
+    const item = await disableClipboardItemSharing(user.id, itemId);
 
     if (!item) {
       return NextResponse.json({ error: 'Clipboard item not found' }, { status: 404 });

@@ -15,14 +15,15 @@ const client = createClient({
 let schemaInitialized = false;
 
 interface ClipboardItemFilters {
+  userId: number;
   contentType?: 'text/plain' | 'text/code';
   search?: string;
   language?: string;
 }
 
-function buildClipboardItemsWhereClause(filters: ClipboardItemFilters = {}) {
-  const conditions: string[] = [];
-  const args: (string | number)[] = [];
+function buildClipboardItemsWhereClause(filters: ClipboardItemFilters) {
+  const conditions: string[] = ['user_id = ?'];
+  const args: (string | number)[] = [filters.userId];
 
   if (filters.contentType) {
     conditions.push('content_type = ?');
@@ -81,6 +82,41 @@ async function migrateShareTokenColumn(): Promise<void> {
   `);
 }
 
+async function migrateUserIdColumn(): Promise<void> {
+  const tableInfo = await client.execute(`PRAGMA table_info(clipboard_items)`);
+  const hasUserId = tableInfo.rows.some(row => row.name === 'user_id');
+
+  if (!hasUserId) {
+    await client.execute(`ALTER TABLE clipboard_items ADD COLUMN user_id INTEGER NULL`);
+  }
+
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_clipboard_user_created_at
+    ON clipboard_items(user_id, created_at DESC)
+  `);
+
+  await client.execute(`
+    CREATE INDEX IF NOT EXISTS idx_clipboard_user_content_type
+    ON clipboard_items(user_id, content_type)
+  `);
+
+  const usersTable = await client.execute({
+    sql: `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+    args: ['users'],
+  });
+
+  if (usersTable.rows.length === 0) {
+    return;
+  }
+
+  await client.execute(`
+    UPDATE clipboard_items
+    SET user_id = (SELECT id FROM users ORDER BY id ASC LIMIT 1)
+    WHERE user_id IS NULL
+      AND EXISTS (SELECT 1 FROM users)
+  `);
+}
+
 /**
  * Initialize database schema
  * Creates clipboard_items table and indexes if they don't exist
@@ -94,6 +130,7 @@ export async function initSchema(): Promise<void> {
     await client.execute(`
       CREATE TABLE IF NOT EXISTS clipboard_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NULL,
         content TEXT NOT NULL,
         content_type VARCHAR(50) NOT NULL DEFAULT 'text/plain',
         language VARCHAR(50) NULL,
@@ -107,6 +144,7 @@ export async function initSchema(): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_created_at ON clipboard_items(created_at DESC)
     `);
 
+    await migrateUserIdColumn();
     await migrateShareTokenColumn();
 
     schemaInitialized = true;
@@ -121,6 +159,7 @@ export async function initSchema(): Promise<void> {
  * Get clipboard items with pagination and optional filtering
  */
 export async function getClipboardItems(
+  userId: number,
   limit: number = 50,
   offset: number = 0,
   contentType?: 'text/plain' | 'text/code',
@@ -129,6 +168,7 @@ export async function getClipboardItems(
 ): Promise<ClipboardItem[]> {
   try {
     const { whereClause, args } = buildClipboardItemsWhereClause({
+      userId,
       contentType,
       search,
       language,
@@ -156,15 +196,18 @@ export async function getClipboardItems(
 /**
  * Get a single clipboard item by ID
  */
-export async function getClipboardItemById(id: number): Promise<ClipboardItem | null> {
+export async function getClipboardItemById(
+  userId: number,
+  id: number
+): Promise<ClipboardItem | null> {
   try {
     const result = await client.execute({
       sql: `
         SELECT id, content, content_type, language, created_at, updated_at, metadata, share_token
         FROM clipboard_items
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
       `,
-      args: [id],
+      args: [id, userId],
     });
 
     if (result.rows.length === 0) {
@@ -181,18 +224,21 @@ export async function getClipboardItemById(id: number): Promise<ClipboardItem | 
 /**
  * Create a new clipboard item
  */
-export async function createClipboardItem(data: CreateClipboardItemData): Promise<ClipboardItem> {
+export async function createClipboardItem(
+  userId: number,
+  data: CreateClipboardItemData
+): Promise<ClipboardItem> {
   try {
     const now = Date.now();
     const metadata = data.metadata ? JSON.stringify(data.metadata) : null;
 
     const result = await client.execute({
       sql: `
-        INSERT INTO clipboard_items (content, content_type, language, created_at, updated_at, metadata)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO clipboard_items (user_id, content, content_type, language, created_at, updated_at, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
         RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
       `,
-      args: [data.content, data.content_type, data.language || null, now, now, metadata],
+      args: [userId, data.content, data.content_type, data.language || null, now, now, metadata],
     });
 
     return mapRowToClipboardItem(result.rows[0] as Record<string, unknown>);
@@ -206,6 +252,7 @@ export async function createClipboardItem(data: CreateClipboardItemData): Promis
  * Update an existing clipboard item by ID
  */
 export async function updateClipboardItem(
+  userId: number,
   id: number,
   data: UpdateClipboardItemData
 ): Promise<ClipboardItem | null> {
@@ -217,10 +264,10 @@ export async function updateClipboardItem(
       sql: `
         UPDATE clipboard_items
         SET content = ?, content_type = ?, language = ?, updated_at = ?, metadata = ?
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
       `,
-      args: [data.content, data.content_type, data.language || null, now, metadata, id],
+      args: [data.content, data.content_type, data.language || null, now, metadata, id, userId],
     });
 
     if (result.rows.length === 0) {
@@ -237,11 +284,11 @@ export async function updateClipboardItem(
 /**
  * Delete a clipboard item by ID
  */
-export async function deleteClipboardItem(id: number): Promise<boolean> {
+export async function deleteClipboardItem(userId: number, id: number): Promise<boolean> {
   try {
     const result = await client.execute({
-      sql: `DELETE FROM clipboard_items WHERE id = ?`,
-      args: [id],
+      sql: `DELETE FROM clipboard_items WHERE id = ? AND user_id = ?`,
+      args: [id, userId],
     });
 
     return result.rowsAffected > 0;
@@ -254,18 +301,20 @@ export async function deleteClipboardItem(id: number): Promise<boolean> {
 /**
  * Clean up old clipboard items, keeping only the specified count
  */
-export async function cleanupOldItems(keepCount: number = 10000): Promise<number> {
+export async function cleanupOldItems(userId: number, keepCount: number = 10000): Promise<number> {
   try {
     const result = await client.execute({
       sql: `
         DELETE FROM clipboard_items
-        WHERE id NOT IN (
-          SELECT id FROM clipboard_items
-          ORDER BY created_at DESC
-          LIMIT ?
-        )
+        WHERE user_id = ?
+          AND id NOT IN (
+            SELECT id FROM clipboard_items
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+          )
       `,
-      args: [keepCount],
+      args: [userId, userId, keepCount],
     });
 
     const deletedCount = result.rowsAffected;
@@ -283,9 +332,12 @@ export async function cleanupOldItems(keepCount: number = 10000): Promise<number
 /**
  * Get total count of clipboard items
  */
-export async function getClipboardItemsCount(): Promise<number> {
+export async function getClipboardItemsCount(userId: number): Promise<number> {
   try {
-    const result = await client.execute(`SELECT COUNT(*) as count FROM clipboard_items`);
+    const result = await client.execute({
+      sql: `SELECT COUNT(*) as count FROM clipboard_items WHERE user_id = ?`,
+      args: [userId],
+    });
     return Number(result.rows[0].count);
   } catch (error) {
     console.error('Failed to get clipboard items count:', error);
@@ -297,12 +349,14 @@ export async function getClipboardItemsCount(): Promise<number> {
  * Get count of clipboard items with optional filtering
  */
 export async function getFilteredClipboardItemsCount(
+  userId: number,
   contentType?: 'text/plain' | 'text/code',
   search?: string,
   language?: string
 ): Promise<number> {
   try {
     const { whereClause, args } = buildClipboardItemsWhereClause({
+      userId,
       contentType,
       search,
       language,
@@ -323,9 +377,12 @@ export async function getFilteredClipboardItemsCount(
 /**
  * Enable sharing for a clipboard item, reusing existing token if present
  */
-export async function enableClipboardItemSharing(id: number): Promise<ClipboardItem | null> {
+export async function enableClipboardItemSharing(
+  userId: number,
+  id: number
+): Promise<ClipboardItem | null> {
   try {
-    const existing = await getClipboardItemById(id);
+    const existing = await getClipboardItemById(userId, id);
     if (!existing) {
       return null;
     }
@@ -337,10 +394,10 @@ export async function enableClipboardItemSharing(id: number): Promise<ClipboardI
       sql: `
         UPDATE clipboard_items
         SET share_token = ?, updated_at = ?
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
       `,
-      args: [shareToken, now, id],
+      args: [shareToken, now, id, userId],
     });
 
     if (result.rows.length === 0) {
@@ -357,7 +414,10 @@ export async function enableClipboardItemSharing(id: number): Promise<ClipboardI
 /**
  * Disable sharing for a clipboard item
  */
-export async function disableClipboardItemSharing(id: number): Promise<ClipboardItem | null> {
+export async function disableClipboardItemSharing(
+  userId: number,
+  id: number
+): Promise<ClipboardItem | null> {
   try {
     const now = Date.now();
 
@@ -365,10 +425,10 @@ export async function disableClipboardItemSharing(id: number): Promise<Clipboard
       sql: `
         UPDATE clipboard_items
         SET share_token = NULL, updated_at = ?
-        WHERE id = ?
+        WHERE id = ? AND user_id = ?
         RETURNING id, content, content_type, language, created_at, updated_at, metadata, share_token
       `,
-      args: [now, id],
+      args: [now, id, userId],
     });
 
     if (result.rows.length === 0) {

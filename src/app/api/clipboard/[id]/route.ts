@@ -22,10 +22,7 @@ async function ensureClipboardSchema() {
  * Fetch a single clipboard item by ID
  * Requires authentication
  */
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Check authentication
     const user = await authenticateRequest(request);
@@ -42,7 +39,7 @@ export async function GET(
       return NextResponse.json({ error: 'Invalid item ID' }, { status: 400 });
     }
 
-    const item = await getClipboardItemById(itemId);
+    const item = await getClipboardItemById(user.id, itemId);
 
     if (!item) {
       return NextResponse.json({ error: 'Clipboard item not found' }, { status: 404 });
@@ -60,10 +57,7 @@ export async function GET(
  * Update a clipboard item by ID
  * Requires authentication
  */
-export async function PATCH(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
+export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Check authentication
     const user = await authenticateRequest(request);
@@ -117,7 +111,7 @@ export async function PATCH(
       metadata: body.metadata,
     };
 
-    const item = await updateClipboardItem(itemId, data);
+    const item = await updateClipboardItem(user.id, itemId, data);
 
     if (!item) {
       return NextResponse.json({ error: 'Clipboard item not found' }, { status: 404 });
@@ -155,7 +149,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Invalid item ID' }, { status: 400 });
     }
 
-    const success = await deleteClipboardItem(itemId);
+    const success = await deleteClipboardItem(user.id, itemId);
 
     if (!success) {
       return NextResponse.json({ error: 'Clipboard item not found' }, { status: 404 });

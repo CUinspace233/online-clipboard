@@ -38,10 +38,7 @@ export async function GET(request: NextRequest) {
     const offset = Math.max(Number(searchParams.get('offset')) || 0, 0);
     const search = searchParams.get('search')?.trim() || undefined;
     const language = searchParams.get('language')?.trim() || undefined;
-    const contentType = searchParams.get('content_type') as
-      | 'text/plain'
-      | 'text/code'
-      | null;
+    const contentType = searchParams.get('content_type') as 'text/plain' | 'text/code' | null;
 
     // Validate content_type if provided
     if (contentType && !['text/plain', 'text/code'].includes(contentType)) {
@@ -51,18 +48,27 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    if (language && !SUPPORTED_LANGUAGES.includes(language as (typeof SUPPORTED_LANGUAGES)[number])) {
+    if (
+      language &&
+      !SUPPORTED_LANGUAGES.includes(language as (typeof SUPPORTED_LANGUAGES)[number])
+    ) {
       return NextResponse.json({ error: 'Invalid language filter' }, { status: 400 });
     }
 
     const items = await getClipboardItems(
+      user.id,
       limit,
       offset,
       contentType || undefined,
       search,
       language
     );
-    const total = await getFilteredClipboardItemsCount(contentType || undefined, search, language);
+    const total = await getFilteredClipboardItemsCount(
+      user.id,
+      contentType || undefined,
+      search,
+      language
+    );
     const response: ClipboardItemsResponse = {
       items,
       total,
@@ -78,10 +84,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error) {
     console.error('GET /api/clipboard error:', error);
-    return NextResponse.json(
-      { error: 'Failed to fetch clipboard items' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Failed to fetch clipboard items' }, { status: 500 });
   }
 }
 
@@ -108,7 +111,10 @@ export async function POST(request: NextRequest) {
 
     // Validate request body
     if (!body.content || typeof body.content !== 'string') {
-      return NextResponse.json({ error: 'Content is required and must be a string' }, { status: 400 });
+      return NextResponse.json(
+        { error: 'Content is required and must be a string' },
+        { status: 400 }
+      );
     }
 
     if (body.content.length > 100000) {
@@ -140,12 +146,12 @@ export async function POST(request: NextRequest) {
       metadata: body.metadata,
     };
 
-    const item = await createClipboardItem(data);
+    const item = await createClipboardItem(user.id, data);
 
     // Cleanup old items if necessary (keep max 10,000 items)
-    const totalCount = await getClipboardItemsCount();
+    const totalCount = await getClipboardItemsCount(user.id);
     if (totalCount > 10000) {
-      await cleanupOldItems(10000);
+      await cleanupOldItems(user.id, 10000);
     }
 
     return NextResponse.json(item, { status: 201 });
