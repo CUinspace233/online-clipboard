@@ -208,7 +208,11 @@ export function ClipboardItem({
     return (
       <TooltipIconButton
         tooltip={
-          isSharing ? 'Creating share link...' : shareLinkCopied ? 'Link copied!' : 'Create share link'
+          isSharing
+            ? 'Creating share link...'
+            : shareLinkCopied
+              ? 'Link copied!'
+              : 'Create share link'
         }
         onClick={handleShare}
         disabled={isSharing || isUnsharing}
@@ -228,12 +232,12 @@ export function ClipboardItem({
   const renderBadges = () => (
     <>
       {item.content_type === 'text/code' && item.language && (
-        <span className="px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">
+        <span className="max-w-full rounded bg-blue-100 px-2 py-1 text-xs font-semibold text-blue-800">
           {item.language}
         </span>
       )}
       {item.content_type === 'text/plain' && hasJsonFormat && (
-        <span className="px-2 py-1 text-xs font-semibold bg-emerald-100 text-emerald-800 rounded">
+        <span className="rounded bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-800">
           JSON
         </span>
       )}
@@ -253,22 +257,35 @@ export function ClipboardItem({
           </span>
         </Tooltip>
       )}
-      <span className="text-xs text-gray-500">created {formatTimestamp(item.created_at)}</span>
-      {wasEdited && (
-        <span className="text-xs font-medium text-amber-700">
-          edited {formatTimestamp(item.updated_at)}
-        </span>
-      )}
     </>
+  );
+
+  const renderTimestamps = () => (
+    <div className="flex items-center gap-2 whitespace-nowrap text-xs">
+      <span className="text-gray-500">created {formatTimestamp(item.created_at)}</span>
+      {wasEdited && (
+        <>
+          <span className="text-gray-300" aria-hidden="true">
+            ·
+          </span>
+          <span className="font-medium text-amber-700">
+            edited {formatTimestamp(item.updated_at)}
+          </span>
+        </>
+      )}
+    </div>
   );
 
   return (
     <>
       <div className="bg-white rounded-lg shadow-md border border-gray-200 overflow-hidden transition-all hover:shadow-lg">
         <div className="p-4">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2">{renderBadges()}</div>
-            <div className="flex items-center gap-2">
+          <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">{renderBadges()}</div>
+              <div className="overflow-x-auto">{renderTimestamps()}</div>
+            </div>
+            <div className="flex w-full flex-wrap items-center justify-start gap-1 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-2">
               {hasJsonFormat && (
                 <Tooltip label={isJsonFormatted ? 'Show raw JSON' : 'Beautify JSON'}>
                   <button
@@ -357,6 +374,7 @@ export function ClipboardItem({
             <div className="flex flex-col gap-3 border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">{renderBadges()}</div>
+                <div className="mb-2 overflow-x-auto">{renderTimestamps()}</div>
                 <h2 className="text-lg font-semibold text-gray-900">Clipboard item</h2>
               </div>
               <div className="flex shrink-0 items-center gap-2">
@@ -383,7 +401,11 @@ export function ClipboardItem({
                     <ClipboardDocumentIcon className="w-5 h-5" />
                   )}
                 </TooltipIconButton>
-                <TooltipIconButton tooltip="Edit" onClick={openEdit} aria-label="Edit clipboard item">
+                <TooltipIconButton
+                  tooltip="Edit"
+                  onClick={openEdit}
+                  aria-label="Edit clipboard item"
+                >
                   <PencilSquareIcon className="w-5 h-5" />
                 </TooltipIconButton>
                 <TooltipIconButton
@@ -435,6 +457,7 @@ export function ClipboardItem({
             <div className="flex flex-col gap-3 border-b border-gray-200 bg-white px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5">
               <div className="min-w-0">
                 <div className="mb-2 flex flex-wrap items-center gap-2">{renderBadges()}</div>
+                <div className="mb-2 overflow-x-auto">{renderTimestamps()}</div>
                 <h2 className="text-lg font-semibold text-gray-900">Edit clipboard item</h2>
               </div>
               <TooltipIconButton

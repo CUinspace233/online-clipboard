@@ -6,6 +6,7 @@ import {
   ArrowRightOnRectangleIcon,
   ClipboardDocumentIcon,
   ArrowsRightLeftIcon,
+  ArrowPathIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
@@ -479,6 +480,10 @@ export default function Home() {
     setSize(1);
   };
 
+  const handleRefreshList = useCallback(async () => {
+    await mutate();
+  }, [mutate]);
+
   const handleLogout = async () => {
     if (confirm('Are you sure you want to logout?')) {
       await logout();
@@ -660,7 +665,21 @@ export default function Home() {
                     <span className="font-semibold text-gray-900">{totalItems}</span>{' '}
                     {totalItems === 1 ? 'result' : 'results'}
                   </div>
-                  {isRefreshingResults && <ResultsRefreshingSkeleton />}
+                  <div className="flex items-center gap-3">
+                    {isRefreshingResults && <ResultsRefreshingSkeleton />}
+                    <button
+                      type="button"
+                      onClick={handleRefreshList}
+                      disabled={isValidating}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 hover:text-gray-900 disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+                    >
+                      <ArrowPathIcon
+                        className={`h-4 w-4 ${isRefreshingResults ? 'animate-spin' : ''}`}
+                        aria-hidden="true"
+                      />
+                      {isRefreshingResults ? 'Refreshing' : 'Refresh'}
+                    </button>
+                  </div>
                 </div>
               </form>
               <ClipboardList
