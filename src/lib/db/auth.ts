@@ -229,6 +229,62 @@ export async function verifyAuthToken(token: string): Promise<User | null> {
 }
 
 /**
+ * Update user password
+ * Requires verifying the current password before allowing the change.
+ */
+export async function updateUserPassword(
+  userId: number,
+  currentPassword: string,
+  newPassword: string
+): Promise<boolean> {
+  try {
+    const result = await client.execute({
+      sql: `SELECT password_hash FROM users WHERE id = ?`,
+      args: [userId],
+    });
+
+    if (result.rows.length === 0) {
+      throw new Error('User not found');
+    }
+
+    const currentHash = String(result.rows[0].password_hash);
+
+    if (!verifyPassword(currentPassword, currentHash)) {
+      throw new Error('Current password is incorrect');
+    }
+
+    const newHash = hashPassword(newPassword);
+
+    const updateResult = await client.execute({
+      sql: `UPDATE users SET password_hash = ? WHERE id = ?`,
+      args: [newHash, userId],
+    });
+
+    return updateResult.rowsAffected > 0;
+  } catch (error) {
+    console.error('Failed to update password:', error);
+    throw error;
+  }
+}
+
+/**
+ * Invalidate all auth tokens for a user (force re-login after password change).
+ */
+export async function deleteAllAuthTokensForUser(userId: number): Promise<number> {
+  try {
+    const result = await client.execute({
+      sql: `DELETE FROM auth_tokens WHERE user_id = ?`,
+      args: [userId],
+    });
+
+    return result.rowsAffected;
+  } catch (error) {
+    console.error('Failed to delete user tokens:', error);
+    throw error;
+  }
+}
+
+/**
  * Delete authentication token (logout)
  */
 export async function deleteAuthToken(token: string): Promise<boolean> {
