@@ -7,13 +7,13 @@ import {
   ClipboardDocumentIcon,
   ArrowsRightLeftIcon,
   ArrowPathIcon,
-  KeyIcon,
   MagnifyingGlassIcon,
   XMarkIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '@/contexts/AuthContext';
 import { AuthForm } from '@/components/auth/AuthForm';
 import { ChangePasswordForm } from '@/components/auth/ChangePasswordForm';
+import { UserMenu } from '@/components/auth/UserMenu';
 import { ClipboardStats } from '@/components/clipboard/ClipboardStats';
 import { ClipboardInput } from '@/components/clipboard/ClipboardInput';
 import { ClipboardList } from '@/components/clipboard/ClipboardList';
@@ -531,18 +531,11 @@ export default function Home() {
             </Tooltip>
           </div>
           <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
-              Welcome, <span className="font-semibold">{user?.username}</span>
-            </span>
-            <Tooltip label="Change password">
-              <button
-                onClick={() => setShowChangePassword(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer"
-              >
-                <KeyIcon className="w-5 h-5" />
-                Change Password
-              </button>
-            </Tooltip>
+            <span className="text-sm text-gray-600">Welcome,</span>
+            <UserMenu
+              username={user?.username ?? ''}
+              onChangePassword={() => setShowChangePassword(true)}
+            />
             <Tooltip label="Sign out">
               <button
                 onClick={handleLogout}
