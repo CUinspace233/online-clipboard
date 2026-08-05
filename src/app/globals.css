@@ -16,6 +16,22 @@
   transform-origin: var(--radix-tooltip-content-transform-origin);
 }
 
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.animate-menu-in {
+  animation: menu-in 150ms ease-out;
+  transform-origin: var(--radix-dropdown-menu-content-transform-origin);
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -161,6 +177,10 @@ body {
   .auth-register-field,
   .auth-error,
   .auth-submit-pulse {
+    animation: none;
+  }
+
+  .animate-menu-in {
     animation: none;
   }
 
