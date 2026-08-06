@@ -509,15 +509,15 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-200">
-        <div className="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-gray-900">Online Clipboard</h1>
+        <div className="max-w-4xl mx-auto px-3 sm:px-4 py-3 sm:py-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-gray-900 truncate">Online Clipboard</h1>
             <Tooltip label="View on GitHub">
               <a
                 href="https://github.com/CUinspace233/online-clipboard"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-gray-500 hover:text-gray-900 transition-colors"
+                className="hidden sm:inline-flex text-gray-500 hover:text-gray-900 transition-colors"
                 aria-label="View on GitHub"
               >
                 <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
@@ -530,8 +530,8 @@ export default function Home() {
               </a>
             </Tooltip>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">Welcome,</span>
+          <div className="flex items-center gap-2 sm:gap-4 shrink-0">
+            <span className="hidden sm:inline text-sm text-gray-600">Welcome,</span>
             <UserMenu
               username={user?.username ?? ''}
               onChangePassword={() => setShowChangePassword(true)}
@@ -539,10 +539,11 @@ export default function Home() {
             <Tooltip label="Sign out">
               <button
                 onClick={handleLogout}
-                className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                aria-label="Sign out"
+                className="flex items-center gap-2 p-2 sm:px-4 sm:py-2 text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
               >
                 <ArrowRightOnRectangleIcon className="w-5 h-5" />
-                Logout
+                <span className="hidden sm:inline">Logout</span>
               </button>
             </Tooltip>
           </div>

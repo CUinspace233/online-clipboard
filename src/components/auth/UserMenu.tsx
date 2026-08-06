@@ -15,10 +15,10 @@ export function UserMenu({ username, onChangePassword }: UserMenuProps) {
         <button
           type="button"
           aria-label={`Open menu for ${username}`}
-          className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
+          className="inline-flex max-w-[10rem] items-center gap-1 rounded-lg px-2 py-1 text-sm font-semibold text-gray-900 transition-colors hover:bg-gray-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 cursor-pointer"
         >
-          <span>{username}</span>
-          <ChevronDownIcon className="h-4 w-4 text-gray-500" aria-hidden="true" />
+          <span className="truncate">{username}</span>
+          <ChevronDownIcon className="h-4 w-4 shrink-0 text-gray-500" aria-hidden="true" />
         </button>
       </DropdownMenu.Trigger>
       <DropdownMenu.Portal>
